@@ -269,8 +269,12 @@ const I18N = {
 function getLanguage() {
   const requested = new URLSearchParams(location.search).get("lang");
   if (requested === "fr" || requested === "en") return requested;
-  const saved = localStorage.getItem("lumo-site-lang");
-  if (saved === "fr" || saved === "en") return saved;
+  try {
+    const saved = localStorage.getItem("lumo-site-lang");
+    if (saved === "fr" || saved === "en") return saved;
+  } catch {
+    // Storage can be unavailable in private contexts.
+  }
   return navigator.language?.toLowerCase().startsWith("fr") ? "fr" : "en";
 }
 
@@ -300,7 +304,11 @@ function applyLanguage(lang) {
     button.classList.toggle("active", button.dataset.lang === lang);
   });
 
-  localStorage.setItem("lumo-site-lang", lang);
+  try {
+    localStorage.setItem("lumo-site-lang", lang);
+  } catch {
+    // Ignore unavailable storage.
+  }
 }
 
 document.querySelectorAll("[data-lang]").forEach((button) => {
