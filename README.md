@@ -15,6 +15,7 @@
     <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT" />
   </p>
   <p><a href="#-français">🇫🇷 Français</a> · <a href="#-english">🇬🇧 English</a></p>
+  <p><strong>Démo en ligne / Live demo :</strong> <a href="https://mrthp.github.io/lumo-desktop/">mrthp.github.io/lumo-desktop</a> · <strong>Releases :</strong> <a href="https://github.com/MrTHP/lumo-desktop/releases">v0.1.0</a></p>
   <img src="docs/screenshots/chat.png" width="100%" alt="Lumo Desktop" />
 </div>
 
