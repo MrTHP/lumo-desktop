@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#08080d">
+  <title>Lumo Desktop — A local-first desktop client for Proton Lumo</title>
+  <meta name="description" content="A fast, private and extensible Rust/Tauri desktop client for Proton Lumo via lumo-tamer. Streaming, projects, memory, attachments and tools.">
+  <link rel="icon" href="icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap nav-inner">
+      <a class="brand" href="#top">
+        <img src="icon.png" alt="Lumo Desktop">
+        <span>Lumo Desktop<small>Proton Lumo client</small></span>
+      </a>
+      <nav class="nav-links">
+        <a href="#features" data-i18n="nav.features">Features</a>
+        <a href="#screenshots" data-i18n="nav.screenshots">Screenshots</a>
+        <a href="#install" data-i18n="nav.install">Install</a>
+        <a href="https://github.com/MrTHP/lumo-desktop" target="_blank" rel="noopener" data-i18n="nav.github">GitHub</a>
+        <a class="btn primary nav-cta" href="#install" data-i18n="nav.download">Download</a>
+      </nav>
+      <div class="lang-switch" aria-label="Language">
+        <button type="button" data-lang="fr">FR</button>
+        <button type="button" data-lang="en">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="wrap">
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow" data-i18n="hero.eyebrow">Open source · Rust · Tauri · Linux</span>
+          <h1 data-i18n-html="hero.title">Your Lumo.<br><span>On your desktop.</span></h1>
+          <p data-i18n="hero.subtitle">The local-first desktop client for Proton Lumo: streaming, projects, memory, attachments and tools — in a fast, private Rust app.</p>
+          <div class="actions">
+            <a class="btn primary" href="https://github.com/MrTHP/lumo-desktop/releases/latest/download/Lumo-Desktop_0.1.0_amd64.AppImage">
+              <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 21h14"/></svg>
+              <span data-i18n="hero.download">Download AppImage</span>
+            </a>
+            <a class="btn ghost" href="https://github.com/MrTHP/lumo-desktop" target="_blank" rel="noopener">
+              <svg viewBox="0 0 24 24"><path d="M9 19c-4 1.5-4-2.5-6-3m12 6v-3.8c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.3 4.3 0 0 0-.1-3.2s-1-.3-3.4 1.2a11.5 11.5 0 0 0-6 0C6.3 3.5 5.3 3.8 5.3 3.8a4.3 4.3 0 0 0-.1 3.2A4.6 4.6 0 0 0 3.9 10c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V22"/></svg>
+              <span data-i18n="hero.github">View on GitHub</span>
+            </a>
+          </div>
+          <div class="meta">
+            <span data-i18n="hero.meta1">Linux x86_64</span>
+            <span data-i18n="hero.meta2">AppImage · .deb</span>
+            <span data-i18n="hero.meta3">MIT licensed</span>
+          </div>
+        </div>
+
+        <div class="hero-shot">
+          <div class="window">
+            <div class="window-bar"><i></i><i></i><i></i><em>Lumo Desktop</em></div>
+            <img src="screenshots/chat-hero.png" alt="Lumo Desktop chat with markdown and code" loading="eager">
+          </div>
+        </div>
+      </section>
+
+      <section class="stats" aria-label="Project stats">
+        <div class="stat"><strong>Rust</strong><span data-i18n="stats.backend">native backend</span></div>
+        <div class="stat"><strong>0</strong><span data-i18n="stats.telemetry">telemetry</span></div>
+        <div class="stat"><strong>FR / EN</strong><span data-i18n="stats.languages">interface language</span></div>
+        <div class="stat"><strong>112 MB</strong><span data-i18n="stats.appimage">AppImage</span></div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="section-head">
+          <span class="kicker" data-i18n="features.kicker">Why Lumo Desktop</span>
+          <h2 data-i18n="features.title">Everything you need to work with Lumo, without leaving your desktop.</h2>
+          <p data-i18n="features.subtitle">A fast, discreet native app. Your conversations stay local; Proton Lumo does the thinking.</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m16 16 3 3 4-5"/></svg></div>
+            <h3 data-i18n="features.streaming.title">Streaming & reasoning</h3>
+            <p data-i18n="features.streaming.text">Token-by-token replies, extended thinking, Markdown and highlighted code. Stop a generation at any time.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2Z"/><path d="M8 3v18"/></svg></div>
+            <h3 data-i18n="features.local.title">Local-first history</h3>
+            <p data-i18n="features.local.text">Conversations, projects, favorites and search live in local JSON files. No account needed for the client itself.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h8"/></svg></div>
+            <h3 data-i18n="features.attachments.title">Attachments & OCR</h3>
+            <p data-i18n="features.attachments.text">Drop text, code, PDF, DOCX/ODT or images. Text is extracted locally and images are OCR'd before being sent to Lumo.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5 5L3 18v3h3l6.7-6.7a4 4 0 0 0 5-5l-2.3 2.3-2-2 2.3-2.3Z"/></svg></div>
+            <h3 data-i18n="features.tools.title">Tools with permissions</h3>
+            <p data-i18n="features.tools.text">Read, write, search and shell tools with a workspace sandbox and confirmation prompts. You stay in control.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0-4 10.5V17h8v-3.5A6 6 0 0 0 12 3Z"/><path d="M9 21h6M10 17v4M14 17v4"/></svg></div>
+            <h3 data-i18n="features.memory.title">Memory & personalization</h3>
+            <p data-i18n="features.memory.text">Tell Lumo who you are, what you do and how to behave. Durable memories can be extracted automatically and stay local.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></div>
+            <h3 data-i18n="features.canvas.title">Canvas & creations</h3>
+            <p data-i18n="features.canvas.text">HTML and SVG creations open in a sandboxed canvas. The library keeps your best artifacts and images one click away.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.5 2.5"/></svg></div>
+            <h3 data-i18n="features.tray.title">System tray</h3>
+            <p data-i18n="features.tray.text">Close to tray, reopen instantly, start a new chat or quit. The app stays out of your way until you need it.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.6 3.8 5.7 3.8 9S14.5 18.4 12 21c-2.5-2.6-3.8-5.7-3.8-9S9.5 5.6 12 3Z"/></svg></div>
+            <h3 data-i18n="features.lang.title">French / English</h3>
+            <p data-i18n="features.lang.text">The interface follows your system locale, with a manual override in Settings. Dates and labels follow the active language.</p>
+          </article>
+          <article class="card">
+            <div class="card-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="M8 11h6M11 8v6"/></svg></div>
+            <h3 data-i18n="features.web.title">Web search</h3>
+            <p data-i18n="features.web.text">Enable lumo-tamer's native web search with one switch. Ask for current weather, news or facts and get live answers.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="screenshots">
+        <div class="section-head">
+          <span class="kicker" data-i18n="gallery.kicker">A closer look</span>
+          <h2 data-i18n="gallery.title">A real desktop for Lumo.</h2>
+          <p data-i18n="gallery.subtitle">Actual screenshots from the app, with a demo profile and sample conversations.</p>
+        </div>
+
+        <div class="gallery">
+          <figure class="wide">
+            <img src="screenshots/landing.png" alt="Lumo Desktop generating an HTML landing page with a Canvas button">
+            <figcaption><strong data-i18n="gallery.landing.title">Canvas & HTML previews</strong> <span data-i18n="gallery.landing.text">Open generated pages in a sandboxed canvas.</span></figcaption>
+          </figure>
+          <figure>
+            <img src="screenshots/attachments.png" alt="Lumo Desktop with image attachments and OCR">
+            <figcaption><strong data-i18n="gallery.attachments.title">Images & attachments</strong> <span data-i18n="gallery.attachments.text">Local OCR and previews.</span></figcaption>
+          </figure>
+          <figure>
+            <img src="screenshots/projects.png" alt="Lumo Desktop projects page">
+            <figcaption><strong data-i18n="gallery.projects.title">Projects</strong> <span data-i18n="gallery.projects.text">Instructions and context per project.</span></figcaption>
+          </figure>
+          <figure>
+            <img src="screenshots/library-images.png" alt="Lumo Desktop image library">
+            <figcaption><strong data-i18n="gallery.library.title">Library</strong> <span data-i18n="gallery.library.text">Creations and images from your chats.</span></figcaption>
+          </figure>
+          <figure>
+            <img src="screenshots/memory.png" alt="Lumo Desktop local memory settings">
+            <figcaption><strong data-i18n="gallery.memory.title">Local memory</strong> <span data-i18n="gallery.memory.text">Durable facts, under your control.</span></figcaption>
+          </figure>
+          <figure class="wide">
+            <img src="screenshots/tools.png" alt="Lumo Desktop tools menu with web search, creations and visualizations">
+            <figcaption><strong data-i18n="gallery.tools.title">Tools at hand</strong> <span data-i18n="gallery.tools.text">Web search, creations and visualizations in one menu.</span></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <span class="kicker" data-i18n="pipeline.kicker">How it works</span>
+          <h2 data-i18n="pipeline.title">Three pieces, no middleman cloud.</h2>
+        </div>
+        <div class="pipeline">
+          <div class="pipeline-node"><strong data-i18n="pipeline.desktop">Lumo Desktop</strong><span data-i18n="pipeline.desktopSub">Rust · Tauri</span></div>
+          <span class="pipeline-arrow">→</span>
+          <div class="pipeline-node"><strong data-i18n="pipeline.tamer">lumo-tamer</strong><span data-i18n="pipeline.tamerSub">local API</span></div>
+          <span class="pipeline-arrow">→</span>
+          <div class="pipeline-node"><strong data-i18n="pipeline.proton">Proton Lumo</strong><span data-i18n="pipeline.protonSub">your account</span></div>
+        </div>
+        <p class="pipeline-note" data-i18n="pipeline.note">The desktop client talks to your local lumo-tamer instance. lumo-tamer handles Proton authentication and the API. No additional server sits in between.</p>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <span class="kicker" data-i18n="privacy.kicker">Privacy</span>
+          <h2 data-i18n="privacy.title">Your data stays with you.</h2>
+          <p data-i18n="privacy.subtitle">Lumo Desktop is a local client, not a hosted service.</p>
+        </div>
+        <div class="privacy-grid">
+          <div class="privacy-item">
+            <strong data-i18n="privacy.local.title">Local storage</strong>
+            <p data-i18n="privacy.local.text">Conversations, projects, memories and settings live in ~/.config/lumo-desktop. No cloud account for the client.</p>
+          </div>
+          <div class="privacy-item">
+            <strong data-i18n="privacy.files.title">Files processed locally</strong>
+            <p data-i18n="privacy.files.text">PDF text, Office documents and image OCR are extracted on your machine. Only the resulting text is sent to Lumo.</p>
+          </div>
+          <div class="privacy-item">
+            <strong data-i18n="privacy.telemetry.title">No telemetry</strong>
+            <p data-i18n="privacy.telemetry.text">No analytics, no tracking, no account required to run the desktop app. The source code is open.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="install">
+        <div class="section-head">
+          <span class="kicker" data-i18n="install.kicker">Download</span>
+          <h2 data-i18n="install.title">Ready to try it?</h2>
+          <p data-i18n="install.subtitle">AppImage or .deb, Linux x86_64. Releases contain both formats.</p>
+        </div>
+
+        <div class="download-grid">
+          <a class="download-card primary" href="https://github.com/MrTHP/lumo-desktop/releases/latest/download/Lumo-Desktop_0.1.0_amd64.AppImage">
+            <strong data-i18n="install.appimage">AppImage</strong>
+            <span data-i18n="install.appimageText">Portable, single file</span>
+            <em data-i18n="install.download">Download →</em>
+          </a>
+          <a class="download-card" href="https://github.com/MrTHP/lumo-desktop/releases/latest/download/Lumo-Desktop_0.1.0_amd64.deb">
+            <strong data-i18n="install.deb">.deb package</strong>
+            <span data-i18n="install.debText">Debian / Ubuntu / derivatives</span>
+            <em data-i18n="install.download">Download →</em>
+          </a>
+          <a class="download-card" href="https://github.com/MrTHP/lumo-desktop/releases/latest" target="_blank" rel="noopener">
+            <strong data-i18n="install.releases">GitHub Releases</strong>
+            <span data-i18n="install.releasesText">All versions and checksums</span>
+            <em data-i18n="install.open">Open →</em>
+          </a>
+        </div>
+
+        <pre class="code-block"><code><span class="comment" data-i18n="install.comment"># Make the AppImage executable, then run it</span>
+<span class="cmd">chmod +x</span> Lumo-Desktop_0.1.0_amd64.AppImage
+<span class="cmd">./</span>Lumo-Desktop_0.1.0_amd64.AppImage</code></pre>
+        <p class="install-note" data-i18n="install.note">The AppImage uses the system WebKitGTK 4.1. For PDF/OCR attachments, install poppler-utils, tesseract and unzip.</p>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <span class="kicker" data-i18n="tech.kicker">Under the hood</span>
+          <h2 data-i18n="tech.title">Rust, Tauri, and nothing unnecessary.</h2>
+        </div>
+        <div class="tech-grid">
+          <div class="tech-item"><strong>Rust</strong><span data-i18n="tech.rust">SSE streaming, tools, attachments</span></div>
+          <div class="tech-item"><strong>Tauri v2</strong><span data-i18n="tech.tauri">System webview, small binary</span></div>
+          <div class="tech-item"><strong>WebKitGTK 4.1</strong><span data-i18n="tech.webkit">Linux rendering</span></div>
+          <div class="tech-item"><strong>JSON</strong><span data-i18n="tech.storage">Local, readable history</span></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="limits">
+          <h3 data-i18n="limits.title">What lumo-tamer does not expose yet</h3>
+          <ul>
+            <li data-i18n="limits.one">Native image generation and Custom Lumos are Proton features that lumo-tamer does not transport.</li>
+            <li data-i18n="limits.two">Proton projects and memory are not synced. Lumo Desktop offers local projects, favorites and memory instead.</li>
+            <li data-i18n="limits.three">Web search is a global lumo-tamer setting; enabling it restarts the local service.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <span class="kicker" data-i18n="faq.kicker">FAQ</span>
+          <h2 data-i18n="faq.title">Frequently asked questions</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary data-i18n="faq.q1">Is this official?</summary>
+            <p data-i18n="faq.a1">No. It is an independent project, not affiliated with Proton. It uses lumo-tamer and Lumo's unofficial API.</p>
+          </details>
+          <details>
+            <summary data-i18n="faq.q2">Where is my data stored?</summary>
+            <p data-i18n="faq.a2">In ~/.config/lumo-desktop. Conversations, projects, memories and settings stay local.</p>
+          </details>
+          <details>
+            <summary data-i18n="faq.q3">Do I need Docker?</summary>
+            <p data-i18n="faq.a3">For the one-click installer, yes: Docker, Compose and git. The assistant installs lumo-tamer, opens the Proton login browser and configures the client.</p>
+          </details>
+          <details>
+            <summary data-i18n="faq.q4">Can I use my existing lumo-tamer install?</summary>
+            <p data-i18n="faq.a4">Yes. Set the lumo-tamer directory and API key in Settings → Connection. The app auto-detects the provider from OpenCode when available.</p>
+          </details>
+          <details>
+            <summary data-i18n="faq.q5">Are images sent to Lumo?</summary>
+            <p data-i18n="faq.a5">Not the raw images. The client extracts text with local OCR and sends that text. lumo-tamer does not transport native attachments yet.</p>
+          </details>
+          <details>
+            <summary data-i18n="faq.q6">What license is it under?</summary>
+            <p data-i18n="faq.a6">MIT. The code is open source and contributions are welcome.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="cta">
+        <h2 data-i18n="cta.title">Give Lumo a desktop.</h2>
+        <p data-i18n="cta.text">Download the AppImage, launch it, and connect your Proton account with the built-in assistant.</p>
+        <div class="actions">
+          <a class="btn primary" href="https://github.com/MrTHP/lumo-desktop/releases/latest/download/Lumo-Desktop_0.1.0_amd64.AppImage" data-i18n="cta.download">Download now</a>
+          <a class="btn ghost" href="https://github.com/MrTHP/lumo-desktop" target="_blank" rel="noopener" data-i18n="cta.github">Star on GitHub</a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap footer-inner">
+      <span>© 2026 Lumo Desktop</span>
+      <a href="https://github.com/MrTHP/lumo-desktop" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/MrTHP/lumo-desktop#readme" target="_blank" rel="noopener" data-i18n="footer.readme">README</a>
+      <a href="https://github.com/MrTHP/lumo-desktop/blob/main/LICENSE" target="_blank" rel="noopener">MIT</a>
+      <span class="footer-spacer"></span>
+      <span data-i18n="footer.disclaimer">Independent project, not affiliated with Proton. Lumo is a trademark of Proton AG.</span>
+    </div>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

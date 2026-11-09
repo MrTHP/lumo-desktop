@@ -1,0 +1,771 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Lumo Desktop</title>
+  <link rel="stylesheet" href="vendor/github-dark.min.css" id="hljs-theme">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-head">
+        <div class="brand">
+          <div class="brand-logo">
+            <svg viewBox="0 0 512 512" aria-hidden="true">
+              <defs>
+                <linearGradient id="brand-g" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stop-color="#9a6bff"/>
+                  <stop offset="1" stop-color="#5b2ee6"/>
+                </linearGradient>
+              </defs>
+              <rect width="512" height="512" rx="116" fill="url(#brand-g)"/>
+              <path d="M126 166c0-27.6 22.4-50 50-50h160c27.6 0 50 22.4 50 50v107c0 27.6-22.4 50-50 50H235l-67 58v-58h-8c-27.6 0-50-22.4-50-50V166z" fill="#fff" fill-opacity=".96"/>
+              <circle cx="194" cy="218" r="15" fill="#6b3ef0"/>
+              <circle cx="256" cy="218" r="15" fill="#6b3ef0" fill-opacity=".72"/>
+              <circle cx="318" cy="218" r="15" fill="#6b3ef0" fill-opacity=".44"/>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <strong>Lumo</strong>
+            <span>Desktop</span>
+          </div>
+        </div>
+        <button id="collapse-btn" class="icon-btn" data-i18n-title="sidebar.collapse" data-i18n-aria-label="sidebar.collapse" title="Réduire la barre latérale" aria-label="Réduire la barre latérale">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h16"/></svg>
+        </button>
+      </div>
+
+      <button id="new-chat" class="new-chat">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        <span data-i18n="sidebar.newChat">Nouvelle conversation</span>
+        <kbd>Ctrl N</kbd>
+      </button>
+
+      <div class="search-box">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="search" type="search" data-i18n-placeholder="sidebar.search" data-i18n-aria-label="sidebar.search" placeholder="Rechercher une conversation" autocomplete="off" aria-label="Rechercher une conversation">
+      </div>
+
+      <div class="sidebar-nav">
+        <button id="nav-all" class="side-nav">
+          <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 2 1.2-4.2A8 8 0 1 1 21 12Z"/></svg>
+          <span data-i18n="sidebar.allChats">All chats</span>
+        </button>
+        <button id="nav-favorites" class="side-nav">
+          <svg viewBox="0 0 24 24"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9Z"/></svg>
+          <span data-i18n="sidebar.favorites">Favorites</span>
+        </button>
+        <button id="nav-projects" class="side-nav">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg>
+          <span data-i18n="sidebar.projects">Projects</span>
+        </button>
+        <button id="nav-library" class="side-nav">
+          <svg viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2Z"/><path d="M8 3v18"/></svg>
+          <span data-i18n="sidebar.library">Library</span>
+        </button>
+      </div>
+
+      <div class="sidebar-heading">
+        <span data-i18n="sidebar.projects">Projects</span>
+        <button id="new-project" class="mini-icon" data-i18n-title="projects.new" title="Nouveau projet" aria-label="Nouveau projet">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+      <nav id="project-list" class="project-list" aria-label="Projets"></nav>
+
+      <div class="sidebar-heading">
+        <span id="recent-label" data-i18n="sidebar.recent">Recent</span>
+        <button id="new-chat-small" class="mini-icon" data-i18n-title="sidebar.newChat" title="Nouvelle conversation" aria-label="Nouvelle conversation">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+      </div>
+      <nav id="conversation-list" class="conversation-list" aria-label="Conversations"></nav>
+
+      <div class="sidebar-footer">
+        <button id="health-pill" class="health-pill" title="État de lumo-tamer">
+          <span id="health-dot" class="dot"></span>
+          <span id="health-label">Connexion…</span>
+        </button>
+        <button id="settings-btn" class="footer-btn">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1z"/></svg>
+          <span data-i18n="sidebar.settings">Paramètres</span>
+        </button>
+        <button id="account-btn" class="account-row">
+          <span class="account-avatar" id="account-avatar">L</span>
+          <span class="account-main">
+            <strong id="account-name">Proton Lumo</strong>
+            <small data-i18n="sidebar.localAccount">Compte local</small>
+          </span>
+        </button>
+      </div>
+    </aside>
+
+    <div id="sidebar-scrim" class="sidebar-scrim"></div>
+
+    <main id="main">
+      <header id="topbar">
+        <button id="sidebar-expand" class="icon-btn expand-only" data-i18n-title="sidebar.expand" data-i18n-aria-label="sidebar.expand" title="Déployer la barre latérale" aria-label="Déployer la barre latérale">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/><path d="m14 9 3 3-3 3"/></svg>
+        </button>
+        <button id="sidebar-toggle" class="icon-btn mobile-only" data-i18n-aria-label="sidebar.expand" aria-label="Ouvrir la barre latérale">
+          <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+
+        <div class="model-controls">
+          <label class="select-wrap" data-i18n-title="topbar.model" title="Modèle Lumo">
+            <svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="m4 7 8 4 8-4M12 21V11"/></svg>
+            <select id="model-select" data-i18n-aria-label="topbar.model" aria-label="Modèle"></select>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg>
+          </label>
+
+          <label class="think-toggle" data-i18n-title="topbar.thinking" title="Activer la réflexion étendue (plus lent, plus précis)">
+            <input type="checkbox" id="thinking-toggle">
+            <span class="think-track"><span class="think-thumb"></span></span>
+            <span class="think-label" data-i18n="topbar.thinkingLabel">Réflexion</span>
+          </label>
+        </div>
+
+        <div class="topbar-actions">
+          <button id="export-btn" class="icon-btn" data-i18n-title="topbar.export" data-i18n-aria-label="topbar.export" title="Copier la conversation en Markdown" aria-label="Exporter">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 21h14"/></svg>
+          </button>
+          <button id="theme-btn" class="icon-btn" data-i18n-title="topbar.theme" data-i18n-aria-label="topbar.theme" title="Changer de thème" aria-label="Changer de thème">
+            <svg class="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="offline-banner" class="offline-banner hidden" role="status">
+        <div class="offline-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        </div>
+        <div class="offline-text">
+          <strong id="offline-title">lumo-tamer est injoignable</strong>
+          <span id="offline-detail">Vérifie que le conteneur est démarré.</span>
+        </div>
+        <div class="offline-actions">
+          <button id="retry-health" class="btn-ghost" data-i18n="offline.retry">Réessayer</button>
+          <button id="start-tamer" class="btn-primary">Démarrer lumo-tamer</button>
+        </div>
+      </div>
+
+      <section id="chat-scroll" aria-live="polite">
+        <div id="welcome" class="welcome">
+          <div class="welcome-orb">
+            <div class="orb-ring"></div>
+            <div class="orb-core">
+              <svg viewBox="0 0 512 512" aria-hidden="true">
+                <path d="M126 166c0-27.6 22.4-50 50-50h160c27.6 0 50 22.4 50 50v107c0 27.6-22.4 50-50 50H235l-67 58v-58h-8c-27.6 0-50-22.4-50-50V166z" fill="#fff" fill-opacity=".96"/>
+                <circle cx="194" cy="218" r="15" fill="#6b3ef0"/>
+                <circle cx="256" cy="218" r="15" fill="#6b3ef0" fill-opacity=".72"/>
+                <circle cx="318" cy="218" r="15" fill="#6b3ef0" fill-opacity=".44"/>
+              </svg>
+            </div>
+          </div>
+          <h1><span data-i18n="welcome.hello">Bonjour, je suis</span> <span class="accent">Lumo</span>.</h1>
+          <p data-i18n="welcome.subtitle">Ton assistant privé, propulsé par Proton Lumo via lumo-tamer.</p>
+          <div class="suggestions" id="suggestions">
+            <button class="suggestion" data-prompt="Explique-moi les bases de Rust en 10 points clés.">
+              <span class="suggestion-icon">🌱</span>
+              <span><strong data-i18n="welcome.s1.title">Découvrir Rust</strong><small data-i18n="welcome.s1.sub">Les bases en 10 points clés</small></span>
+            </button>
+            <button class="suggestion" data-prompt="Écris un script Python propre qui renomme tous les fichiers d'un dossier en ajoutant leur date de modification.">
+              <span class="suggestion-icon">🐍</span>
+              <span><strong data-i18n="welcome.s2.title">Un script Python</strong><small data-i18n="welcome.s2.sub">Renommer des fichiers proprement</small></span>
+            </button>
+            <button class="suggestion" data-prompt="Résume les avantages et inconvénients de Tauri face à Electron pour une application desktop.">
+              <span class="suggestion-icon">⚖️</span>
+              <span><strong data-i18n="welcome.s3.title">Comparer Tauri & Electron</strong><small data-i18n="welcome.s3.sub">Avantages, limites, poids</small></span>
+            </button>
+            <button class="suggestion" data-prompt="Donne-moi 5 idées de projets desktop utiles que je peux construire en Rust ce week-end.">
+              <span class="suggestion-icon">💡</span>
+              <span><strong data-i18n="welcome.s4.title">Idées de projets</strong><small data-i18n="welcome.s4.sub">À construire en Rust</small></span>
+            </button>
+          </div>
+          <div class="welcome-foot">
+            <span class="privacy-dot"></span>
+            <span data-i18n="welcome.privacy">Conversations stockées localement · jamais envoyées ailleurs qu'à Proton Lumo</span>
+          </div>
+        </div>
+
+        <div id="messages" class="messages"></div>
+      </section>
+
+      <button id="scroll-bottom" class="scroll-bottom hidden" data-i18n-title="scrollBottom" title="Aller en bas">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg>
+      </button>
+
+      <footer class="composer-area">
+        <div class="composer">
+          <div id="attachment-bar" class="attachment-bar hidden"></div>
+          <textarea id="input" rows="1" data-i18n-placeholder="composer.placeholder" placeholder="Écris un message à Lumo…" spellcheck="true" data-i18n-aria-label="composer.message" aria-label="Message"></textarea>
+          <div class="composer-row">
+            <button type="button" id="tools-btn" class="attach-btn" data-i18n-title="tools.title" data-i18n-aria-label="tools.title" title="Outils" aria-label="Outils">
+              <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+            </button>
+            <button type="button" id="attach-btn" class="attach-btn" data-i18n-title="composer.attach" data-i18n-aria-label="composer.attach" title="Joindre un fichier" aria-label="Joindre un fichier">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+            <input id="file-input" type="file" multiple hidden>
+            <div class="composer-hint">
+              <span id="token-info"></span>
+            </div>
+            <div class="composer-buttons">
+              <button id="stop-btn" class="stop-btn hidden" data-i18n-title="composer.stop" title="Arrêter la génération">
+                <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none"/></svg>
+                <span data-i18n="composer.stop">Arrêter</span>
+              </button>
+              <button id="send-btn" class="send-btn" data-i18n-title="composer.send" data-i18n-aria-label="composer.send" title="Envoyer (Entrée)" aria-label="Envoyer" disabled>
+                <svg viewBox="0 0 24 24"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="tools-menu" class="tools-menu hidden">
+            <button type="button" class="tools-menu-item" data-tool-toggle="webSearch">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <span data-i18n="tools.webSearch">Recherche web</span>
+              <span class="menu-switch" id="tool-web-search-state"></span>
+            </button>
+            <button type="button" class="tools-menu-item" data-tool-toggle="creations">
+              <svg viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2Z"/><path d="M8 3v18"/></svg>
+              <span data-i18n="tools.creations">Créations</span>
+              <span class="menu-switch" id="tool-creations-state"></span>
+            </button>
+            <button type="button" class="tools-menu-item" data-tool-toggle="visualizations">
+              <svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="m7 15 3-4 3 2 4-6"/></svg>
+              <span data-i18n="tools.visualizations">Visualisations</span>
+              <span class="menu-switch" id="tool-visualizations-state"></span>
+            </button>
+            <div class="tools-menu-separator"></div>
+            <button type="button" class="tools-menu-item disabled" id="tool-create-image">
+              <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></svg>
+              <span data-i18n="tools.createImage">Créer une image</span>
+              <span class="menu-badge" data-i18n="tools.unsupported">indisponible</span>
+            </button>
+            <button type="button" class="tools-menu-item disabled">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+              <span data-i18n="tools.customLumos">Custom Lumos</span>
+              <span class="menu-badge" data-i18n="tools.unsupported">indisponible</span>
+            </button>
+          </div>
+        </div>
+        <div class="disclaimer" data-i18n="composer.disclaimer">Lumo peut se tromper. Tes conversations restent sur ta machine.</div>
+      </footer>
+
+      <section id="all-chats-view" class="page-view hidden">
+        <div class="page-head">
+          <div>
+            <h1 id="all-chats-title" data-i18n="pages.allChats">All chats</h1>
+            <p id="all-chats-subtitle" data-i18n="pages.allChatsSub">Toutes tes conversations, classées par projet.</p>
+          </div>
+          <div class="page-search">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="all-chats-search" type="search" data-i18n-placeholder="sidebar.search" placeholder="Rechercher une conversation">
+          </div>
+        </div>
+        <div id="all-chats-list" class="chat-list"></div>
+      </section>
+
+      <section id="projects-view" class="page-view hidden">
+        <div class="page-head">
+          <div>
+            <h1 data-i18n="pages.projects">My projects</h1>
+            <p data-i18n="pages.projectsSub">Regroupe des conversations, des instructions et du contexte.</p>
+          </div>
+          <button id="new-project-page" class="btn-primary" data-i18n="projects.newButton">+ Nouveau projet</button>
+        </div>
+        <div id="projects-list" class="projects-list"></div>
+        <div class="inspiration">
+          <h2 data-i18n="pages.inspiration">Inspiration</h2>
+          <div class="suggestions">
+            <button class="suggestion" data-prompt="Aide-moi à organiser un projet de recherche sur ">
+              <span class="suggestion-icon">🔎</span>
+              <span><strong data-i18n="pages.inspiration.research">Partenaire de recherche</strong><small data-i18n="pages.inspiration.researchSub">Synthétise des sources et développe des idées.</small></span>
+            </button>
+            <button class="suggestion" data-prompt="Aide-moi à améliorer ce texte : ">
+              <span class="suggestion-icon">✍️</span>
+              <span><strong data-i18n="pages.inspiration.writing">Assistant d'écriture</strong><small data-i18n="pages.inspiration.writingSub">Développe des histoires et affine la prose.</small></span>
+            </button>
+            <button class="suggestion" data-prompt="Apprends-moi les bases de ">
+              <span class="suggestion-icon">🎓</span>
+              <span><strong data-i18n="pages.inspiration.learn">Apprendre une langue</strong><small data-i18n="pages.inspiration.learnSub">Entraîne-toi avec des conversations guidées.</small></span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section id="library-view" class="page-view hidden">
+        <div class="page-head">
+          <div>
+            <h1 data-i18n="pages.library">Library</h1>
+            <p data-i18n="pages.librarySub">Créations et images issues de tes conversations.</p>
+          </div>
+          <div class="page-search">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input id="library-search" type="search" data-i18n-placeholder="pages.searchLibrary" placeholder="Rechercher dans la bibliothèque">
+          </div>
+        </div>
+        <div class="library-tabs">
+          <button id="library-tab-creations" class="library-tab active" data-i18n="pages.creations">Créations</button>
+          <button id="library-tab-images" class="library-tab" data-i18n="pages.images">Images</button>
+        </div>
+        <div id="library-content" class="library-content"></div>
+        <div class="library-create">
+          <input id="library-prompt" type="text" data-i18n-placeholder="pages.imagePrompt" placeholder="Décrivez votre image…">
+          <button id="library-create-image" class="btn-primary" data-i18n="pages.createImage">Créer</button>
+          <span class="library-note" data-i18n="pages.imageUnsupported">La génération d'images native n'est pas exposée par lumo-tamer.</span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="drop-overlay" class="drop-overlay hidden">
+    <div class="drop-card">
+      <svg viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
+      <strong data-i18n="composer.drop">Dépose les fichiers ici</strong>
+      <span data-i18n="composer.dropHint">Images, PDF, documents, texte, code…</span>
+    </div>
+  </div>
+
+  <dialog id="settings-dialog" class="modal">
+    <form method="dialog" id="settings-form">
+      <div class="modal-head">
+        <div>
+          <h2 data-i18n="settings.title">Paramètres</h2>
+          <p data-i18n="settings.subtitle">Connexion à ton instance lumo-tamer.</p>
+        </div>
+        <button type="button" class="icon-btn modal-close" data-close="settings-dialog" data-i18n-aria-label="settings.close" aria-label="Fermer">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <div class="settings-tabs" role="tablist">
+        <button type="button" class="settings-tab active" data-settings-tab="connection" data-i18n="settings.tab.connection">Connexion</button>
+        <button type="button" class="settings-tab" data-settings-tab="personalization" data-i18n="settings.tab.personalization">Personnalisation</button>
+        <button type="button" class="settings-tab" data-settings-tab="memory" data-i18n="settings.tab.memory">Mémoire</button>
+        <button type="button" class="settings-tab" data-settings-tab="general" data-i18n="settings.tab.general">Général</button>
+        <button type="button" class="settings-tab" data-settings-tab="tools" data-i18n="settings.tab.tools">Outils</button>
+      </div>
+
+      <div class="settings-pane" data-settings-pane="connection">
+        <div class="field">
+          <label for="setting-base-url" data-i18n="settings.apiUrl">URL de l'API</label>
+          <input id="setting-base-url" type="url" placeholder="http://127.0.0.1:3003/v1" required>
+          <small data-i18n="settings.apiUrlHint">L'endpoint OpenAI-compatible de lumo-tamer (généralement …/v1).</small>
+        </div>
+
+        <div class="field">
+          <label for="setting-api-key" data-i18n="settings.apiKey">Clé API</label>
+          <div class="input-with-button">
+            <input id="setting-api-key" type="password" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholder" placeholder="Clé définie dans config.yaml">
+            <button type="button" id="toggle-key" class="btn-ghost small" data-i18n="settings.show">Afficher</button>
+          </div>
+          <small data-i18n="settings.apiKeyHint">Récupérée automatiquement depuis ta config OpenCode si disponible.</small>
+        </div>
+
+        <div class="field">
+          <label for="setting-system-prompt"><span data-i18n="settings.systemPrompt">Prompt système</span> <span class="optional" data-i18n="settings.optional">(optionnel)</span></label>
+          <textarea id="setting-system-prompt" rows="3" data-i18n-placeholder="settings.systemPromptPlaceholder" placeholder="Ex. Réponds toujours en français, de façon concise."></textarea>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="setting-theme" data-i18n="settings.theme">Thème</label>
+            <select id="setting-theme">
+              <option value="dark" data-i18n="settings.themeDark">Sombre</option>
+              <option value="light" data-i18n="settings.themeLight">Clair</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="setting-language" data-i18n="settings.language">Langue</label>
+            <select id="setting-language">
+              <option value="auto" data-i18n="settings.languageAuto">Automatique (système)</option>
+              <option value="fr">Français</option>
+              <option value="en">English</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="setting-tamer-dir" data-i18n="settings.tamerDir">Dossier lumo-tamer</label>
+            <input id="setting-tamer-dir" type="text" placeholder="/home/moi/Projects/lumo-tamer">
+          </div>
+          <div class="field">
+            <label for="setting-tamer-repo" data-i18n="settings.tamerRepo">Dépôt source</label>
+            <input id="setting-tamer-repo" type="text" placeholder="https://github.com/ZeroTricks/lumo-tamer.git">
+          </div>
+        </div>
+
+        <button type="button" id="open-install" class="btn-ghost settings-install-button" data-i18n="settings.installTamer">
+          Installer ou connecter lumo-tamer
+        </button>
+      </div>
+
+      <div class="settings-pane hidden" data-settings-pane="personalization">
+        <div class="field">
+          <label for="setting-profile-name" data-i18n="profile.name">Comment Lumo devrait-il t'appeler ?</label>
+          <input id="setting-profile-name" type="text" placeholder="MrTHP">
+        </div>
+        <div class="field">
+          <label for="setting-profile-occupation" data-i18n="profile.occupation">Que fais-tu ?</label>
+          <input id="setting-profile-occupation" type="text" placeholder="Concierge/Gestionnaire">
+        </div>
+        <div class="field">
+          <label for="setting-profile-context" data-i18n="profile.context">Y a-t-il autre chose que Lumo devrait savoir sur toi ?</label>
+          <textarea id="setting-profile-context" rows="5" placeholder="# CONTEXTE UTILISATEUR&#10;..."></textarea>
+        </div>
+        <div class="field">
+          <label for="setting-profile-behavior" data-i18n="profile.behavior">Comment Lumo doit-il se comporter ?</label>
+          <textarea id="setting-profile-behavior" rows="4" placeholder="# IDENTITÉ ET TON&#10;..."></textarea>
+        </div>
+        <button type="button" id="reset-personalization" class="btn-ghost" data-i18n="profile.reset">Tout réinitialiser</button>
+      </div>
+
+      <div class="settings-pane hidden" data-settings-pane="memory">
+        <label class="check-row strong">
+          <input type="checkbox" id="setting-auto-memory">
+          <span data-i18n="memory.auto">Mise à jour automatique de la mémoire</span>
+        </label>
+        <p class="settings-hint" data-i18n="memory.autoHint">Après une réponse, Lumo peut extraire des souvenirs durables et les ajouter à ta mémoire locale.</p>
+
+        <div class="memory-head">
+          <span id="memory-count" class="badge">0</span>
+          <button type="button" id="clear-memories" class="btn-ghost small" data-i18n="memory.clear">Tout effacer</button>
+        </div>
+        <div id="memory-list" class="memory-list"></div>
+        <div class="memory-add">
+          <input id="memory-input" type="text" data-i18n-placeholder="memory.placeholder" placeholder="Ajouter un souvenir…">
+          <button type="button" id="add-memory" class="btn-ghost small" data-i18n="memory.add">Ajouter</button>
+        </div>
+        <button type="button" id="extract-memories" class="btn-ghost" data-i18n="memory.extract">Extraire de la conversation active</button>
+        <p class="settings-hint" data-i18n="memory.hint">La mémoire est stockée localement et injectée dans le prompt système. Elle n'est pas synchronisée avec le compte Proton.</p>
+      </div>
+
+      <div class="settings-pane hidden" data-settings-pane="general">
+        <section class="settings-section">
+          <div class="section-heading">
+            <h3 data-i18n="general.tools">Outils</h3>
+          </div>
+          <label class="check-row">
+            <input type="checkbox" id="setting-web-search">
+            <span data-i18n="general.webSearch">Recherche web</span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="setting-creations">
+            <span data-i18n="general.creations">Créations (documents, code, pages)</span>
+          </label>
+          <label class="check-row">
+            <input type="checkbox" id="setting-visualizations">
+            <span data-i18n="general.visualizations">Visualisations de données</span>
+          </label>
+          <p class="settings-hint" data-i18n="general.webSearchHint">La recherche web est un réglage global de lumo-tamer ; l'activation redémarre le service.</p>
+        </section>
+
+        <section class="settings-section">
+          <div class="section-heading">
+            <h3 data-i18n="general.whatCanLumoSee">Ce que Lumo peut voir</h3>
+          </div>
+          <div class="field">
+            <label for="setting-past-chats" data-i18n="general.pastChats">Anciennes conversations</label>
+            <select id="setting-past-chats">
+              <option value="all" data-i18n="general.pastAll">Toutes les conversations</option>
+              <option value="current" data-i18n="general.pastCurrent">Conversation courante uniquement</option>
+              <option value="none" data-i18n="general.pastNone">Aucune</option>
+            </select>
+            <small data-i18n="general.pastHint">Quand « toutes » est actif, les extraits pertinents sont ajoutés localement au prompt.</small>
+          </div>
+          <div class="field">
+            <label for="setting-project-files" data-i18n="general.projectFiles">Fichiers de projet</label>
+            <select id="setting-project-files">
+              <option value="all" data-i18n="general.projectAll">Tous les projets</option>
+              <option value="current" data-i18n="general.projectCurrent">Projet courant</option>
+              <option value="none" data-i18n="general.projectNone">Aucun</option>
+            </select>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div class="section-heading">
+            <h3 data-i18n="general.data">Vos données</h3>
+          </div>
+          <button type="button" id="reset-search-index" class="btn-ghost" data-i18n="general.resetSearch">Réinitialiser l'index de recherche</button>
+          <button type="button" id="delete-all-data" class="btn-danger" data-i18n="general.deleteAll">Supprimer toutes les données</button>
+          <p class="settings-hint" data-i18n="general.deleteHint">Supprime les conversations, projets, souvenirs, pièces jointes et réglages locaux.</p>
+        </section>
+      </div>
+
+      <div class="settings-pane hidden" data-settings-pane="tools">
+        <section class="settings-section">
+          <div class="section-heading">
+            <h3 data-i18n="settings.toolsSection">Outils et fichiers</h3>
+            <span class="badge" data-i18n="settings.localBadge">local</span>
+          </div>
+
+          <label class="check-row strong">
+            <input type="checkbox" id="setting-tools-enabled">
+            <span data-i18n="settings.toolsEnabled">Autoriser Lumo à utiliser des outils</span>
+          </label>
+
+          <div id="tool-permissions" class="tool-permissions">
+            <div class="permission-grid">
+              <label class="check-row">
+                <input type="checkbox" id="setting-allow-read">
+                <span data-i18n="settings.allowRead">Lire des fichiers et dossiers</span>
+              </label>
+              <label class="check-row">
+                <input type="checkbox" id="setting-allow-write">
+                <span data-i18n="settings.allowWrite">Écrire ou modifier des fichiers</span>
+              </label>
+              <label class="check-row">
+                <input type="checkbox" id="setting-allow-shell">
+                <span data-i18n="settings.allowShell">Exécuter des commandes shell</span>
+              </label>
+            </div>
+
+            <div class="field">
+              <label for="setting-workspace" data-i18n="settings.workspace">Dossier de travail autorisé</label>
+              <input id="setting-workspace" type="text" placeholder="/home/moi">
+              <small data-i18n="settings.workspaceHint">Les outils ne peuvent accéder qu'aux chemins situés dans ce dossier. Laisser vide pour utiliser le dossier personnel.</small>
+            </div>
+
+            <label class="check-row">
+              <input type="checkbox" id="setting-confirm-writes">
+              <span data-i18n="settings.confirmWrites">Demander confirmation avant chaque écriture</span>
+            </label>
+            <label class="check-row">
+              <input type="checkbox" id="setting-confirm-shell">
+              <span data-i18n="settings.confirmShell">Demander confirmation avant chaque commande</span>
+            </label>
+
+            <p class="warning" data-i18n="settings.toolsWarning">Les commandes shell s'exécutent avec ton compte utilisateur et peuvent accéder à tout ce à quoi il a accès. Active-les seulement si tu fais confiance au modèle.</p>
+          </div>
+        </section>
+      </div>
+
+      <div id="settings-test-result" class="test-result hidden"></div>
+
+      <div class="modal-actions">
+        <button type="button" id="test-connection" class="btn-ghost" data-i18n="settings.test">Tester la connexion</button>
+        <div class="spacer"></div>
+        <button type="button" class="btn-ghost" data-close="settings-dialog" data-i18n="settings.cancel">Annuler</button>
+        <button type="submit" class="btn-primary" data-i18n="settings.save">Enregistrer</button>
+      </div>
+      <div class="settings-foot">
+        <span data-i18n="settings.dataDir">Données locales :</span> <code id="data-dir">…</code>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="rename-dialog" class="modal small">
+    <form method="dialog" id="rename-form">
+      <div class="modal-head">
+        <h2 data-i18n="rename.title">Renommer la conversation</h2>
+      </div>
+      <div class="field">
+        <input id="rename-input" type="text" maxlength="120" required>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="rename-dialog" data-i18n="rename.cancel">Annuler</button>
+        <button type="submit" class="btn-primary" data-i18n="rename.submit">Renommer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="project-dialog" class="modal small">
+    <form method="dialog" id="project-form">
+      <div class="modal-head">
+        <div>
+          <h2 id="project-dialog-title" data-i18n="projects.new">Nouveau projet</h2>
+          <p data-i18n="projects.subtitle">Les projets gardent les conversations, les instructions et le contexte ensemble.</p>
+        </div>
+        <button type="button" class="icon-btn modal-close" data-close="project-dialog" aria-label="Fermer">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="project-name" data-i18n="projects.name">Nom</label>
+          <input id="project-name" type="text" maxlength="80" required placeholder="Planificateur de vacances">
+        </div>
+        <div class="field">
+          <label for="project-icon" data-i18n="projects.icon">Icône</label>
+          <select id="project-icon">
+            <option value="📁">📁</option>
+            <option value="🔎">🔎</option>
+            <option value="🧠">🧠</option>
+            <option value="💻">💻</option>
+            <option value="🧪">🧪</option>
+            <option value="🎨">🎨</option>
+            <option value="🌱">🌱</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="project-instructions" data-i18n="projects.instructions">Instructions du projet (facultatif)</label>
+        <textarea id="project-instructions" rows="5" data-i18n-placeholder="projects.instructionsPlaceholder" placeholder="Ajoute des instructions sur le ton, le style et le contexte que Lumo doit adopter."></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="project-dialog" data-i18n="projects.cancel">Annuler</button>
+        <div class="spacer"></div>
+        <button type="submit" id="project-submit" class="btn-primary" data-i18n="projects.create">Créer un projet</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="canvas-dialog" class="modal canvas-modal">
+    <div class="canvas-head">
+      <h2 id="canvas-title">Canvas</h2>
+      <div class="canvas-actions">
+        <button type="button" id="canvas-code-toggle" class="btn-ghost small" data-i18n="canvas.code">Code</button>
+        <button type="button" class="icon-btn" data-close="canvas-dialog" aria-label="Fermer">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <iframe id="canvas-frame" sandbox="" title="Canvas"></iframe>
+    <pre id="canvas-code" class="canvas-code hidden"></pre>
+  </dialog>
+
+  <dialog id="move-dialog" class="modal small">
+    <form method="dialog" id="move-form">
+      <div class="modal-head">
+        <h2 data-i18n="projects.move">Déplacer vers un projet</h2>
+      </div>
+      <div class="field">
+        <label for="move-project" data-i18n="sidebar.projects">Projets</label>
+        <select id="move-project"></select>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="move-dialog" data-i18n="projects.cancel">Annuler</button>
+        <div class="spacer"></div>
+        <button type="submit" class="btn-primary" data-i18n="projects.save">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog" class="modal small">
+    <form method="dialog" id="confirm-form">
+      <div class="modal-head">
+        <h2 id="confirm-title" data-i18n="delete.title">Supprimer la conversation</h2>
+      </div>
+      <p id="confirm-message" class="confirm-message"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="confirm-dialog" data-i18n="delete.cancel">Annuler</button>
+        <button type="submit" class="btn-danger" data-i18n="delete.submit">Supprimer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="image-dialog" class="modal image-modal">
+    <button type="button" class="icon-btn image-close" data-close="image-dialog" data-i18n-aria-label="settings.close" aria-label="Fermer">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <img id="preview-image" alt="">
+  </dialog>
+
+  <dialog id="permission-dialog" class="modal small">
+    <form method="dialog" id="permission-form">
+      <div class="modal-head">
+        <div>
+          <h2 data-i18n="permission.title">Autorisation requise</h2>
+          <p data-i18n="permission.description">Lumo souhaite utiliser un outil qui peut modifier ton ordinateur.</p>
+        </div>
+      </div>
+
+      <div class="permission-card">
+        <div class="permission-tool">
+          <span id="permission-tool-icon" class="permission-tool-icon">
+            <svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 0-5 5L3 18v3h3l6.7-6.7a4 4 0 0 0 5-5l-2.3 2.3-2-2 2.3-2.3Z"/></svg>
+          </span>
+          <div>
+            <strong id="permission-tool-name">—</strong>
+            <code id="permission-summary">—</code>
+          </div>
+        </div>
+        <pre id="permission-preview" class="permission-preview"></pre>
+      </div>
+
+      <label class="check-row">
+        <input type="checkbox" id="permission-always">
+        <span data-i18n="permission.always">Toujours autoriser pour cette session</span>
+      </label>
+
+      <div class="modal-actions">
+        <button type="button" id="permission-deny" class="btn-ghost" data-i18n="permission.deny">Refuser</button>
+        <div class="spacer"></div>
+        <button type="button" id="permission-allow" class="btn-primary" data-i18n="permission.allow">Autoriser</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="install-dialog" class="modal install-modal">
+    <form method="dialog" id="install-form">
+      <div class="modal-head">
+        <div>
+          <h2 data-i18n="install.title">Installer lumo-tamer</h2>
+          <p data-i18n="install.subtitle">Tout-en-un : installation, connexion Proton, démarrage.</p>
+        </div>
+        <button type="button" class="icon-btn modal-close" data-close="install-dialog" data-i18n-aria-label="install.close" aria-label="Fermer">
+          <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <p id="install-intro" class="install-intro" data-i18n="install.intro">
+        Le client peut installer lumo-tamer localement avec Docker et ouvrir la fenêtre de connexion Proton.
+      </p>
+
+      <div id="install-checks" class="install-checks"></div>
+      <button type="button" id="install-docker-help" class="btn-ghost hidden" data-i18n="install.dockerInstall">Installer Docker</button>
+
+      <div id="install-steps" class="install-steps hidden">
+        <div class="install-step" data-step="docker"><span class="step-dot"></span><span data-i18n="install.step.docker">Docker</span></div>
+        <div class="install-step" data-step="git"><span class="step-dot"></span><span data-i18n="install.step.git">Git</span></div>
+        <div class="install-step" data-step="clone"><span class="step-dot"></span><span data-i18n="install.step.clone">Téléchargement de lumo-tamer</span></div>
+        <div class="install-step" data-step="secrets"><span class="step-dot"></span><span data-i18n="install.step.secrets">Coffre de secrets</span></div>
+        <div class="install-step" data-step="config"><span class="step-dot"></span><span data-i18n="install.step.config">Configuration</span></div>
+        <div class="install-step" data-step="build"><span class="step-dot"></span><span data-i18n="install.step.build">Construction de lumo-tamer</span></div>
+        <div class="install-step" data-step="browser-build"><span class="step-dot"></span><span data-i18n="install.step.browserBuild">Construction du navigateur</span></div>
+        <div class="install-step" data-step="browser"><span class="step-dot"></span><span data-i18n="install.step.browser">Navigateur d'authentification</span></div>
+        <div class="install-step" data-step="auth"><span class="step-dot"></span><span data-i18n="install.step.auth">Connexion Proton</span></div>
+        <div class="install-step" data-step="start"><span class="step-dot"></span><span data-i18n="install.step.start">Démarrage de lumo-tamer</span></div>
+      </div>
+
+      <pre id="install-log" class="install-log hidden"></pre>
+
+      <div id="install-auth" class="install-auth hidden">
+        <p data-i18n="install.authHelp">
+          Connecte-toi à ton compte Proton Lumo dans la fenêtre du navigateur, puis reviens ici et continue.
+        </p>
+        <button type="button" id="open-auth-browser" class="btn-ghost" data-i18n="install.openBrowser">
+          Ouvrir la fenêtre de connexion
+        </button>
+        <p class="install-hint" data-i18n="install.authHint">
+          Le navigateur intégré est accessible sur https://localhost:3001 (certificat auto-signé).
+        </p>
+      </div>
+
+      <div id="install-result" class="test-result hidden"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-ghost" data-close="install-dialog" data-i18n="install.close">Fermer</button>
+        <button type="button" id="install-connect" class="btn-ghost hidden" data-i18n="install.authNow">Se connecter à Proton</button>
+        <div class="spacer"></div>
+        <button type="button" id="install-action" class="btn-primary" data-i18n="install.installNow">Installer maintenant</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="vendor/marked.min.js"></script>
+  <script src="vendor/purify.min.js"></script>
+  <script src="vendor/highlight.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
