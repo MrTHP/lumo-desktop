@@ -381,6 +381,7 @@ async fn generate_inner(
             )
         )
     })?;
+    set_private_permissions(&image_path);
 
     let thumbnail_url = write_thumbnail(&directory, &id, &bytes, lang).unwrap_or_default();
 
@@ -585,6 +586,7 @@ fn write_thumbnail(directory: &Path, id: &str, bytes: &[u8], lang: &str) -> Resu
             )
         )
     })?;
+    set_private_permissions(&directory.join(format!("{id}.thumb.png")));
     Ok(format!(
         "data:image/png;base64,{}",
         base64::engine::general_purpose::STANDARD.encode(&buffer)
@@ -636,7 +638,16 @@ fn write_index(directory: &Path, index: &[GeneratedImage]) -> Result<(), String>
     let bytes = serde_json::to_vec_pretty(index).map_err(|error| error.to_string())?;
     let tmp = directory.join("index.json.tmp");
     fs::write(&tmp, bytes).map_err(|error| error.to_string())?;
+    set_private_permissions(&tmp);
     fs::rename(&tmp, directory.join("index.json")).map_err(|error| error.to_string())
+}
+
+fn set_private_permissions(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
+    }
 }
 
 fn ensure_valid_id(id: &str) -> Result<(), String> {
