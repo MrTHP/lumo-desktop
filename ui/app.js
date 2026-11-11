@@ -1461,7 +1461,12 @@ function bindUi() {
   $("setting-provider-kind").addEventListener("change", (event) => {
     const kind = event.target.value;
     $("provider-kind-badge").textContent = providerKindLabel(kind);
-    if (!$("setting-base-url").value.trim() || $("setting-base-url").value.includes("127.0.0.1:3003")) {
+    const baseUrl = $("setting-base-url").value.trim();
+    if (
+      !baseUrl ||
+      baseUrl.includes("127.0.0.1:3003") ||
+      baseUrl.includes("api.deepseek.com")
+    ) {
       $("setting-base-url").value =
         kind === "lumo"
           ? "http://127.0.0.1:3003/v1"
@@ -1469,7 +1474,8 @@ function bindUi() {
             ? "https://api.deepseek.com/v1"
             : "";
     }
-    if (!$("setting-provider-model").value.trim()) {
+    const model = $("setting-provider-model").value.trim();
+    if (!model || model === "lumo" || model === "deepseek-flash") {
       $("setting-provider-model").value =
         kind === "lumo" ? "lumo" : kind === "deepseek" ? "deepseek-flash" : "";
     }
@@ -5331,8 +5337,12 @@ function isDefaultTitle(title) {
   return [
     I18N.fr["title.newConversation"],
     I18N.en["title.newConversation"],
+    I18N.fr["agent.newChat"],
+    I18N.en["agent.newChat"],
     "Nouvelle conversation",
     "New chat",
+    "Nouvel agent OpenCode",
+    "New OpenCode agent",
   ].includes(title);
 }
 
