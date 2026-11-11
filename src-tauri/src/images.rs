@@ -5,6 +5,7 @@ use serde_json::{json, Map, Value};
 use std::fs;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tauri::State;
 use tokio_util::sync::CancellationToken;
@@ -28,6 +29,7 @@ pub struct ImageStatus {
     pub model_loaded: bool,
     pub allocated_mb: Option<f64>,
     pub reserved_mb: Option<f64>,
+    pub managed: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -98,6 +100,7 @@ pub async fn image_status(
     base_url: String,
 ) -> Result<ImageStatus, String> {
     let base = normalized_base_url(&base_url);
+    let managed = managed_pid(&state).is_some();
     let url = format!("{base}/backends");
     let response = state
         .client
@@ -122,6 +125,7 @@ pub async fn image_status(
                 model_loaded: false,
                 allocated_mb: None,
                 reserved_mb: None,
+                managed,
             });
         }
     };
@@ -142,6 +146,7 @@ pub async fn image_status(
             model_loaded: false,
             allocated_mb: None,
             reserved_mb: None,
+            managed,
         });
     }
 
@@ -225,7 +230,169 @@ pub async fn image_status(
         model_loaded,
         allocated_mb,
         reserved_mb,
+        managed,
     })
+}
+
+#[tauri::command]
+pub async fn start_image_backend(
+    state: State<'_, AppState>,
+    directory: Option<String>,
+    base_url: Option<String>,
+    language: Option<String>,
+) -> Result<Value, String> {
+    let lang = if language.as_deref() == Some("fr") {
+        "fr"
+    } else {
+        "en"
+    };
+
+    if let Some(pid) = managed_pid(&state) {
+        return Ok(json!({
+            "started": false,
+            "alreadyRunning": true,
+            "pid": pid,
+        }));
+    }
+
+    let settings = state.store.load_settings();
+    let base = normalized_base_url(
+        base_url
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .unwrap_or(&settings.image_base_url),
+    );
+    let directory = directory
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or(settings.bonsai_dir.clone());
+    let directory = PathBuf::from(directory.trim());
+    let script = directory.join("scripts/serve.sh");
+    if !script.is_file() {
+        return Err(format!(
+            "{} {}",
+            tr(
+                lang,
+                "Script Bonsai introuvable :",
+                "Bonsai script not found:"
+            ),
+            script.display()
+        ));
+    }
+
+    // Someone already started the server manually.
+    if let Ok(response) = state
+        .client
+        .get(format!("{base}/backends"))
+        .timeout(Duration::from_secs(1))
+        .send()
+        .await
+    {
+        if response.status().is_success() {
+            return Ok(json!({ "started": false, "alreadyRunning": true }));
+        }
+    }
+
+    let port = port_from_base_url(&base).unwrap_or(8000);
+    let frontend_port = free_local_port().unwrap_or_else(|| port.saturating_add(1));
+    let log_path = state.store.dir().join("bonsai-serve.log");
+    let log = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .map_err(|error| {
+            format!(
+                "{}: {error}",
+                tr(
+                    lang,
+                    "Impossible d'ouvrir le journal Bonsai",
+                    "Could not open the Bonsai log"
+                )
+            )
+        })?;
+    let log_err = log.try_clone().map_err(|error| error.to_string())?;
+
+    let mut command = tokio::process::Command::new("bash");
+    command
+        .arg(&script)
+        .current_dir(&directory)
+        .env("BACKEND_PORT", port.to_string())
+        .env("FRONTEND_PORT", frontend_port.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::from(log))
+        .stderr(Stdio::from(log_err));
+    #[cfg(unix)]
+    {
+        command.process_group(0);
+    }
+
+    let mut child = command.spawn().map_err(|error| {
+        format!(
+            "{} {}: {error}",
+            tr(
+                lang,
+                "Impossible de lancer le backend Bonsai dans",
+                "Could not start the Bonsai backend in"
+            ),
+            directory.display()
+        )
+    })?;
+    let pid = child.id();
+
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    match child.try_wait() {
+        Ok(Some(status)) => {
+            return Err(format!(
+                "{} ({status})\n{}",
+                tr(
+                    lang,
+                    "Le backend Bonsai s'est arrêté au démarrage",
+                    "The Bonsai backend exited during startup"
+                ),
+                tail_file(&log_path, 18)
+            ));
+        }
+        Ok(None) => {}
+        Err(error) => {
+            return Err(format!(
+                "{}: {error}\n{}",
+                tr(
+                    lang,
+                    "Impossible de vérifier le backend Bonsai",
+                    "Could not check the Bonsai backend"
+                ),
+                tail_file(&log_path, 18)
+            ));
+        }
+    }
+
+    if let Some(pid) = pid {
+        if let Ok(mut slot) = state.image_server_pid.lock() {
+            *slot = Some(pid);
+        }
+    }
+
+    Ok(json!({
+        "started": true,
+        "alreadyRunning": false,
+        "pid": pid,
+        "port": port,
+        "logPath": log_path.to_string_lossy(),
+    }))
+}
+
+#[tauri::command]
+pub fn stop_image_backend(state: State<'_, AppState>) -> bool {
+    let pid = state
+        .image_server_pid
+        .lock()
+        .ok()
+        .and_then(|mut pid| pid.take());
+    if let Some(pid) = pid {
+        terminate_process_group(pid);
+        true
+    } else {
+        false
+    }
 }
 
 #[tauri::command]
@@ -486,6 +653,17 @@ pub fn unload_on_exit(app_handle: &tauri::AppHandle) {
     let Some(state) = app_handle.try_state::<AppState>() else {
         return;
     };
+    let managed_pid = state
+        .image_server_pid
+        .lock()
+        .ok()
+        .and_then(|mut pid| pid.take());
+    if let Some(pid) = managed_pid {
+        // The server was started by Model Desk: stopping it releases the whole
+        // CUDA context, not just the model weights.
+        terminate_process_group(pid);
+        return;
+    }
     let settings = state.store.load_settings();
     if !settings.image_unload_on_quit {
         return;
@@ -670,6 +848,71 @@ fn normalized_base_url(value: &str) -> String {
     } else {
         trimmed.to_string()
     }
+}
+
+fn port_from_base_url(base: &str) -> Option<u16> {
+    let rest = base.split("://").nth(1).unwrap_or(base);
+    let host = rest.split('/').next().unwrap_or(rest);
+    host.rsplit_once(':')?.1.parse().ok()
+}
+
+fn free_local_port() -> Option<u16> {
+    std::net::TcpListener::bind(("127.0.0.1", 0))
+        .ok()?
+        .local_addr()
+        .ok()
+        .map(|address| address.port())
+}
+
+fn managed_pid(state: &AppState) -> Option<u32> {
+    let mut slot = state.image_server_pid.lock().ok()?;
+    if let Some(pid) = *slot {
+        if pid_alive(pid) {
+            return Some(pid);
+        }
+        *slot = None;
+    }
+    None
+}
+
+#[cfg(unix)]
+fn pid_alive(pid: u32) -> bool {
+    std::process::Command::new("kill")
+        .args(["-0", &pid.to_string()])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn pid_alive(_pid: u32) -> bool {
+    true
+}
+
+fn terminate_process_group(pid: u32) {
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("kill")
+            .args(["-TERM", &format!("-{pid}")])
+            .status();
+        std::thread::sleep(Duration::from_millis(700));
+        let _ = std::process::Command::new("kill")
+            .args(["-KILL", &format!("-{pid}")])
+            .status();
+    }
+    #[cfg(windows)]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/T", "/F"])
+            .status();
+    }
+}
+
+fn tail_file(path: &Path, lines: usize) -> String {
+    let content = fs::read_to_string(path).unwrap_or_default();
+    let mut tail: Vec<&str> = content.lines().rev().take(lines).collect();
+    tail.reverse();
+    truncate(&tail.join("\n"), 2500)
 }
 
 fn family_from_arm(arm: &str) -> String {

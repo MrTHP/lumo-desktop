@@ -341,6 +341,7 @@
             <div class="image-studio-status">
               <span id="image-status-dot" class="image-status-dot"></span>
               <span id="image-status-label" class="image-status-label" data-i18n="imageStudio.statusChecking">Vérification…</span>
+              <button type="button" id="image-status-start" class="btn-ghost small hidden" data-i18n="imageStudio.start">Démarrer le backend</button>
               <button type="button" id="image-status-unload" class="btn-ghost small hidden" data-i18n="imageStudio.unload">Décharger le modèle</button>
               <button type="button" id="image-status-refresh" class="btn-ghost small" data-i18n="imageStudio.refresh">Actualiser</button>
               <button type="button" id="image-status-configure" class="btn-ghost small" data-i18n="imageStudio.configure">Configurer</button>
@@ -787,11 +788,17 @@
               <input id="setting-image-batch" type="number" min="1" max="8" step="1">
             </div>
           </div>
-          <div class="input-with-button">
+          <div class="image-backend-actions">
             <button type="button" id="test-image-connection" class="btn-ghost" data-i18n="settings.imageTest">Tester le backend</button>
+            <button type="button" id="image-start-backend" class="btn-ghost" data-i18n="settings.imageStart">Démarrer le backend</button>
+            <button type="button" id="image-stop-backend" class="btn-ghost" data-i18n="settings.imageStopServer">Arrêter le serveur</button>
             <button type="button" id="unload-image-connection" class="btn-ghost" data-i18n="settings.imageUnload">Décharger le modèle</button>
             <span id="image-test-result" class="settings-hint"></span>
           </div>
+          <label class="check-row">
+            <input type="checkbox" id="setting-image-auto-start" checked>
+            <span data-i18n="settings.imageAutoStart">Démarrer automatiquement le backend Bonsai quand j'ouvre l'onglet Images</span>
+          </label>
           <label class="check-row">
             <input type="checkbox" id="setting-image-unload-quit" checked>
             <span data-i18n="settings.imageUnloadOnQuit">Décharger le modèle Bonsai de la mémoire GPU quand Model Desk quitte</span>

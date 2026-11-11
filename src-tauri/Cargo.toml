@@ -1,6 +1,6 @@
 [package]
 name = "model-desk"
-version = "0.4.0"
+version = "0.4.1"
 description = "A local-first multi-provider AI workspace"
 authors = ["mrthp"]
 edition = "2021"

@@ -4,7 +4,7 @@
   <p><strong>Un espace IA local-first, multi-fournisseurs.</strong><br />
   <em>A local-first, multi-provider AI workspace.</em></p>
   <p>
-    <a href="https://github.com/MrTHP/model-desk/releases/latest/download/Model-Desk_0.4.0_amd64.AppImage"><img src="https://img.shields.io/badge/Download-AppImage-8b5cf6?style=for-the-badge&logo=linux&logoColor=white" alt="Download AppImage" /></a>
+    <a href="https://github.com/MrTHP/model-desk/releases/latest/download/Model-Desk_0.4.1_amd64.AppImage"><img src="https://img.shields.io/badge/Download-AppImage-8b5cf6?style=for-the-badge&logo=linux&logoColor=white" alt="Download AppImage" /></a>
     <a href="https://mrthp.github.io/model-desk/"><img src="https://img.shields.io/badge/Demo-GitHub%20Pages-2dd4bf?style=for-the-badge&logo=githubpages&logoColor=white" alt="Demo" /></a>
     <a href="https://github.com/MrTHP/model-desk"><img src="https://img.shields.io/badge/Source-GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
   </p>
@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT" />
   </p>
   <p><a href="#-français">🇫🇷 Français</a> · <a href="#-english">🇬🇧 English</a></p>
-  <p><strong>Démo en ligne / Live demo :</strong> <a href="https://mrthp.github.io/model-desk/">mrthp.github.io/model-desk</a> · <strong>Releases :</strong> <a href="https://github.com/MrTHP/model-desk/releases">v0.4.0</a></p>
+  <p><strong>Démo en ligne / Live demo :</strong> <a href="https://mrthp.github.io/model-desk/">mrthp.github.io/model-desk</a> · <strong>Releases :</strong> <a href="https://github.com/MrTHP/model-desk/releases">v0.4.1</a></p>
   <img src="docs/screenshots/chat.png" width="100%" alt="Model Desk" />
 </div>
 
@@ -34,7 +34,7 @@ L'interface suit la langue du système (français ou anglais), les conversations
 ### ✨ Fonctionnalités
 
 - **Multi-fournisseurs** : Lumo Tamer, **DeepSeek** et tout endpoint OpenAI-compatible. La clé DeepSeek est détectée depuis OpenCode (`~/.local/share/opencode/auth.json`) ou saisie manuellement.
-- **Studio d'images Bonsai** : génération locale via [Bonsai Image Demo](https://github.com/PrismML-Eng/Bonsai-Image-Demo) (backend PrismML). Prompt, variante ternary/binary, résolutions de 352×704 à 1408×704, seed, étapes, guidage, lot de 4, arrêt, métadonnées, galerie persistante dans `~/.config/model-desk/images`, déchargement manuel du modèle GPU et déchargement automatique à la fermeture.
+- **Studio d'images Bonsai** : génération locale via [Bonsai Image Demo](https://github.com/PrismML-Eng/Bonsai-Image-Demo) (backend PrismML). Prompt, variante ternary/binary, résolutions de 352×704 à 1408×704, seed, étapes, guidage, lot de 4, arrêt, métadonnées, galerie persistante dans `~/.config/model-desk/images`, démarrage automatique du backend à l'ouverture de l'onglet Images, déchargement manuel du modèle GPU et déchargement automatique à la fermeture.
 - **Agent OpenCode** : un mode agent qui lance `opencode run` dans un dossier projet, avec choix du modèle OpenCode, agent `build`/`plan`, auto-approbation optionnelle, streaming des réponses et des appels d'outils.
 - **Streaming token par token** avec bouton Arrêter, affichage de la réflexion (`reasoning_content`) et rendu Markdown + coloration du code.
 - **Historique local-first** : conversations, recherche, favoris, projets avec instructions et compteur de discussions.
@@ -66,8 +66,8 @@ L'interface suit la langue du système (français ou anglais), les conversations
 Télécharge l'**AppImage** ou le paquet **.deb** depuis la page [Releases](https://github.com/MrTHP/model-desk/releases/latest).
 
 ```sh
-chmod +x Model-Desk_0.4.0_amd64.AppImage
-./Model-Desk_0.4.0_amd64.AppImage
+chmod +x Model-Desk_0.4.1_amd64.AppImage
+./Model-Desk_0.4.1_amd64.AppImage
 ```
 
 Au premier lancement, si `lumo-tamer` n'est pas joignable, l'assistant propose de l'installer :
@@ -94,6 +94,8 @@ cd Bonsai-Image-Demo
 ```
 
 Puis, dans Model Desk : **Bibliothèque → Images** ou **Outils → Créer une image**. L'URL par défaut est `http://127.0.0.1:8000` et se règle dans **Paramètres → Images**. Le backend expose le modèle Bonsai Image 4B en variante **ternary (1.58-bit)** ou **binary (1-bit)** selon les poids téléchargés et ton matériel (CUDA/NVIDIA sur Linux, MLX/Apple Silicon sur macOS). Le premier démarrage compile les kernels et peut prendre plusieurs minutes ; `serve.sh` garde ensuite le modèle chaud en mémoire.
+
+Model Desk peut aussi démarrer le backend pour toi : automatiquement à l'ouverture de l'onglet **Images** (option activée par défaut) ou avec le bouton **Démarrer le backend**. Le serveur lancé par Model Desk est arrêté quand tu quittes l'application. Si tu l'as lancé manuellement, Model Desk ne le tue pas : il décharge seulement le modèle (option **Décharger le modèle à la fermeture**). Si le démarrage automatique est désactivé, le bouton apparaît quand le backend est hors ligne.
 
 Les images générées restent locales dans `~/.config/model-desk/images/` (PNG + index JSON + miniatures). Aucune image n'est envoyée à un service tiers.
 
@@ -178,7 +180,7 @@ The UI follows your system language (French or English), conversations stay in `
 ### ✨ Features
 
 - **Multi-provider**: Lumo Tamer, **DeepSeek** and any OpenAI-compatible endpoint. The DeepSeek key is detected from OpenCode (`~/.local/share/opencode/auth.json`) or entered manually.
-- **Bonsai image studio**: local generation through [Bonsai Image Demo](https://github.com/PrismML-Eng/Bonsai-Image-Demo) (PrismML backend). Prompt, ternary/binary variant, resolutions from 352×704 to 1408×704, seed, steps, guidance, batch of 4, stop, metadata, a persistent gallery in `~/.config/model-desk/images`, manual GPU model unload and automatic unload on app quit.
+- **Bonsai image studio**: local generation through [Bonsai Image Demo](https://github.com/PrismML-Eng/Bonsai-Image-Demo) (PrismML backend). Prompt, ternary/binary variant, resolutions from 352×704 to 1408×704, seed, steps, guidance, batch of 4, stop, metadata, a persistent gallery in `~/.config/model-desk/images`, automatic backend start when opening the Images tab, manual GPU model unload and automatic unload on app quit.
 - **OpenCode agent**: an agent mode that runs `opencode run` inside a project folder, with OpenCode model selection, `build`/`plan` agent, optional auto-approval, streamed replies and tool calls.
 - **Token-by-token streaming** with stop button, reasoning display (`reasoning_content`) and Markdown + syntax-highlighted code.
 - **Local-first history**: conversations, search, favorites, projects with instructions and chat counts.
@@ -210,8 +212,8 @@ The UI follows your system language (French or English), conversations stay in `
 Download the **AppImage** or **.deb** from the [Releases](https://github.com/MrTHP/model-desk/releases/latest) page.
 
 ```sh
-chmod +x Model-Desk_0.4.0_amd64.AppImage
-./Model-Desk_0.4.0_amd64.AppImage
+chmod +x Model-Desk_0.4.1_amd64.AppImage
+./Model-Desk_0.4.1_amd64.AppImage
 ```
 
 On first launch, if `lumo-tamer` is unreachable, the assistant offers to install it:
@@ -238,6 +240,8 @@ cd Bonsai-Image-Demo
 ```
 
 Then open **Library → Images** or **Tools → Create an image** in Model Desk. The default URL is `http://127.0.0.1:8000` and can be changed in **Settings → Images**. The backend serves Bonsai Image 4B as **ternary (1.58-bit)** or **binary (1-bit)** depending on downloaded weights and your hardware (CUDA/NVIDIA on Linux, MLX/Apple Silicon on macOS). The first launch compiles kernels and can take several minutes; `serve.sh` then keeps the model warm in memory.
+
+Model Desk can also start the backend for you: automatically when you open the **Images** tab (enabled by default), or with the **Start backend** button. A server started by Model Desk is stopped when you quit the app. If you started it manually, Model Desk leaves it running and only unloads the model (the **Unload model on quit** option). When auto-start is disabled, the button appears whenever the backend is offline.
 
 Generated images stay local in `~/.config/model-desk/images/` (PNG + JSON index + thumbnails). Nothing is uploaded to a third-party service.
 

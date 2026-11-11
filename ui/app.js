@@ -90,6 +90,7 @@ const app = {
   generatedImages: [],
   imageStatus: null,
   imageBusy: false,
+  imageStarting: false,
   imageMode: "single",
   imageRequestId: null,
   imageAbort: false,
@@ -250,6 +251,7 @@ function defaultSettings() {
     imageResolution: "1x1-512",
     imageBatchSize: 4,
     imageUnloadOnQuit: true,
+    imageAutoStart: true,
     providers: [],
     activeProvider: "",
     opencodeBinary: "opencode",
@@ -696,6 +698,9 @@ const I18N = {
     "settings.imageBatch": "Taille du lot",
     "settings.imageTest": "Tester le backend",
     "settings.imageUnload": "Décharger le modèle",
+    "settings.imageStart": "Démarrer le backend",
+    "settings.imageStopServer": "Arrêter le serveur",
+    "settings.imageAutoStart": "Démarrer automatiquement le backend Bonsai quand j'ouvre l'onglet Images",
     "settings.imageUnloadOnQuit": "Décharger le modèle Bonsai de la mémoire GPU quand Model Desk quitte",
     "settings.imageCommandHint": "Le premier lancement télécharge les poids et prépare les kernels GPU (plusieurs minutes). Garde `serve.sh` ouvert pendant que tu génères des images.",
     "settings.imageCredit": "Bonsai Image Demo est un projet PrismML (licence Apache-2.0). Model Desk fournit seulement l'interface et se connecte à ton serveur local.",
@@ -733,6 +738,14 @@ const I18N = {
     "imageStudio.statusUnhealthy": "Backend en ligne, GPU indisponible ({reason})",
     "imageStudio.statusOffline": "Backend injoignable",
     "imageStudio.statusUnloaded": "Connecté · modèle déchargé",
+    "imageStudio.start": "Démarrer le backend",
+    "imageStudio.starting": "Démarrage du backend…",
+    "imageStudio.started": "Backend Bonsai démarré",
+    "imageStudio.startAlready": "Le backend Bonsai est déjà en ligne",
+    "imageStudio.startTimeout": "Le backend Bonsai n'a pas répondu à temps. Vérifie le journal ~/.config/model-desk/bonsai-serve.log.",
+    "imageStudio.stopConfirm": "Arrêter le serveur Bonsai démarré par Model Desk ?",
+    "imageStudio.serverStopped": "Serveur Bonsai arrêté",
+    "imageStudio.serverNotManaged": "Ce serveur n'a pas été démarré par Model Desk. Arrête-le depuis son terminal.",
     "imageStudio.unload": "Décharger le modèle",
     "imageStudio.unloading": "Déchargement…",
     "imageStudio.unloaded": "Modèle Bonsai déchargé ({mb} Mo libérés)",
@@ -1160,6 +1173,9 @@ const I18N = {
     "settings.imageBatch": "Batch size",
     "settings.imageTest": "Test backend",
     "settings.imageUnload": "Unload model",
+    "settings.imageStart": "Start backend",
+    "settings.imageStopServer": "Stop server",
+    "settings.imageAutoStart": "Automatically start the Bonsai backend when I open the Images tab",
     "settings.imageUnloadOnQuit": "Unload the Bonsai model from GPU memory when Model Desk quits",
     "settings.imageCommandHint": "The first launch downloads weights and prepares GPU kernels (several minutes). Keep `serve.sh` running while you generate images.",
     "settings.imageCredit": "Bonsai Image Demo is a PrismML project (Apache-2.0). Model Desk only provides the interface and connects to your local server.",
@@ -1197,6 +1213,14 @@ const I18N = {
     "imageStudio.statusUnhealthy": "Backend online, GPU unavailable ({reason})",
     "imageStudio.statusOffline": "Backend unreachable",
     "imageStudio.statusUnloaded": "Connected · model unloaded",
+    "imageStudio.start": "Start backend",
+    "imageStudio.starting": "Starting backend…",
+    "imageStudio.started": "Bonsai backend started",
+    "imageStudio.startAlready": "The Bonsai backend is already running",
+    "imageStudio.startTimeout": "The Bonsai backend did not respond in time. Check ~/.config/model-desk/bonsai-serve.log.",
+    "imageStudio.stopConfirm": "Stop the Bonsai server started by Model Desk?",
+    "imageStudio.serverStopped": "Bonsai server stopped",
+    "imageStudio.serverNotManaged": "This server was not started by Model Desk. Stop it from its terminal.",
     "imageStudio.unload": "Unload model",
     "imageStudio.unloading": "Unloading…",
     "imageStudio.unloaded": "Bonsai model unloaded ({mb} MB freed)",
@@ -1775,7 +1799,7 @@ function bindUi() {
   $("library-tab-images").addEventListener("click", () => {
     app.libraryTab = "images";
     renderLibrary();
-    refreshImageStatus({ quiet: true });
+    ensureImageBackend();
   });
   $("tool-create-image").addEventListener("click", () => {
     $("tools-menu").classList.add("hidden");
@@ -1786,7 +1810,12 @@ function bindUi() {
   $("image-seed-random").addEventListener("click", randomizeImageSeed);
   $("image-stop").addEventListener("click", stopImageGeneration);
   $("image-status-refresh").addEventListener("click", () => refreshImageStatus());
+  $("image-status-start").addEventListener("click", () => startImageBackend());
   $("image-status-unload").addEventListener("click", unloadImageModel);
+  $("image-start-backend").addEventListener("click", () =>
+    startImageBackend({ fromSettings: true })
+  );
+  $("image-stop-backend").addEventListener("click", stopImageBackend);
   $("unload-image-connection").addEventListener("click", unloadImageModel);
   $("image-status-configure").addEventListener("click", () => {
     openSettings();
@@ -2738,11 +2767,103 @@ function imageBackendFor(family) {
 function openImageStudio() {
   app.libraryTab = "images";
   showPage("library");
-  refreshImageStatus({ quiet: true });
+  ensureImageBackend();
   setTimeout(() => {
     $("image-prompt").focus();
     $("image-studio").scrollIntoView({ behavior: "smooth", block: "start" });
   }, 60);
+}
+
+async function ensureImageBackend() {
+  if (app.imageStarting) return;
+  await refreshImageStatus({ quiet: true });
+  if (app.imageStatus?.ok) return;
+  if (app.settings.imageAutoStart === false) return;
+  await startImageBackend({ automatic: true });
+}
+
+async function startImageBackend({ automatic = false, fromSettings = false } = {}) {
+  if (app.imageStarting) return;
+  if (app.imageStatus?.ok) {
+    if (!automatic) showToast(t("imageStudio.startAlready"));
+    return;
+  }
+  const directory = fromSettings
+    ? $("setting-image-bonsai-dir").value.trim() ||
+      app.settings.bonsaiDir ||
+      ""
+    : app.settings.bonsaiDir || "";
+  const baseUrl = fromSettings
+    ? $("setting-image-url").value.trim() ||
+      app.settings.imageBaseUrl ||
+      ""
+    : app.settings.imageBaseUrl || "";
+  if (fromSettings) {
+    app.settings.bonsaiDir = directory;
+    app.settings.imageBaseUrl = baseUrl;
+    persistSettings();
+  }
+
+  app.imageStarting = true;
+  setImageError("");
+  updateImageStatusUi();
+  updateImageBusy();
+
+  try {
+    const result = await invoke("start_image_backend", {
+      directory,
+      baseUrl,
+      language: app.language,
+    });
+    if (result?.alreadyRunning) {
+      if (!automatic) showToast(t("imageStudio.startAlready"));
+    } else if (!automatic) {
+      showToast(t("imageStudio.starting"));
+    }
+
+    const ready = await waitForImageBackend(180000);
+    if (ready) {
+      if (!automatic) showToast(t("imageStudio.started"));
+    } else {
+      const message = t("imageStudio.startTimeout");
+      setImageError(message);
+      if (!automatic) showToast(message, true);
+    }
+  } catch (error) {
+    const message = compactError(error);
+    setImageError(message);
+    if (!automatic) showToast(message, true);
+  } finally {
+    app.imageStarting = false;
+    updateImageStatusUi();
+    updateImageBusy();
+    await refreshImageStatus({ quiet: true });
+  }
+}
+
+async function waitForImageBackend(timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await refreshImageStatus({ quiet: true });
+    if (app.imageStatus?.ok) return true;
+    await sleep(1500);
+  }
+  return false;
+}
+
+async function stopImageBackend() {
+  if (!window.confirm(t("imageStudio.stopConfirm"))) return;
+  try {
+    const stopped = await invoke("stop_image_backend");
+    if (stopped) {
+      showToast(t("imageStudio.serverStopped"));
+    } else {
+      showToast(t("imageStudio.serverNotManaged"), true);
+    }
+    await refreshImageStatus({ quiet: true });
+  } catch (error) {
+    showToast(compactError(error), true);
+  }
 }
 
 async function refreshImageStatus({ quiet = false } = {}) {
@@ -2775,14 +2896,35 @@ function updateImageStatusUi() {
   const dot = $("image-status-dot");
   const label = $("image-status-label");
   const unload = $("image-status-unload");
+  const start = $("image-status-start");
+  const settingsStart = $("image-start-backend");
+  const settingsStop = $("image-stop-backend");
   const settingsUnload = $("unload-image-connection");
+  const starting = app.imageStarting;
   dot.className = "image-status-dot";
   label.title = "";
+
+  if (starting) {
+    dot.classList.add("warn");
+    label.textContent = t("imageStudio.starting");
+    start.classList.add("hidden");
+    unload.classList.add("hidden");
+    if (settingsStart) settingsStart.disabled = true;
+    if (settingsStop) settingsStop.disabled = true;
+    if (settingsUnload) settingsUnload.disabled = true;
+    return;
+  }
+
+  start.classList.toggle("hidden", !(status && !status.ok));
+  if (settingsStart) settingsStart.disabled = Boolean(status?.ok);
+  if (settingsStop) settingsStop.disabled = !status?.managed;
+
   const canUnload = Boolean(
     status?.ok && status.memorySupported && status.modelLoaded
   );
   unload.classList.toggle("hidden", !canUnload);
   if (settingsUnload) settingsUnload.disabled = !canUnload;
+
   if (!status) {
     label.textContent = t("imageStudio.statusChecking");
     return;
@@ -2831,7 +2973,8 @@ function setImageError(message) {
 
 function updateImageBusy(step = 0, total = 0) {
   const busy = app.imageBusy;
-  $("image-generate").disabled = busy;
+  const blocked = busy || app.imageStarting;
+  $("image-generate").disabled = blocked;
   $("image-stop").classList.toggle("hidden", !busy);
   $("image-stop").disabled = false;
   $("image-form")
@@ -2855,7 +2998,9 @@ function updateImageBusy(step = 0, total = 0) {
           total,
         })}`
       : t("imageStudio.generating")
-    : t("imageStudio.generate");
+    : app.imageStarting
+      ? t("imageStudio.starting")
+      : t("imageStudio.generate");
 }
 
 async function generateImages(event) {
@@ -5585,6 +5730,7 @@ function openSettings() {
       : 1
   );
   $("setting-image-batch").value = String(imageBatchSize());
+  $("setting-image-auto-start").checked = settings.imageAutoStart !== false;
   $("setting-image-unload-quit").checked = settings.imageUnloadOnQuit !== false;
   $("image-test-result").textContent = "";
   refreshAgentModelOptions();
@@ -5953,6 +6099,7 @@ function settingsFromForm() {
       Math.min(8, Number.parseInt($("setting-image-batch").value, 10) || 4)
     ),
     imageUnloadOnQuit: $("setting-image-unload-quit").checked,
+    imageAutoStart: $("setting-image-auto-start").checked,
     pastChatsAccess: $("setting-past-chats").value,
     projectFilesAccess: $("setting-project-files").value,
     opencodeBinary: $("setting-opencode-binary").value.trim() || "opencode",
