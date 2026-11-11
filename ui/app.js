@@ -331,7 +331,9 @@ async function onProviderChange(id) {
   const conversation = activeConversation();
   if (conversation && conversation.mode !== "agent") {
     conversation.model = provider.model || conversation.model;
-    conversation.thinking = Boolean(provider.supportsThinking && conversation.thinking);
+    conversation.thinking =
+      provider.kind === "lumo" &&
+      Boolean(provider.supportsThinking && conversation.thinking);
     conversation.updatedAt = Date.now();
   }
 
@@ -1456,6 +1458,22 @@ function bindUi() {
   $("test-connection").addEventListener("click", testConnection);
   $("setting-tools-enabled").addEventListener("change", updateToolPermissionsState);
   $("setting-provider-select").addEventListener("change", onSettingsProviderChange);
+  $("setting-provider-kind").addEventListener("change", (event) => {
+    const kind = event.target.value;
+    $("provider-kind-badge").textContent = providerKindLabel(kind);
+    if (!$("setting-base-url").value.trim() || $("setting-base-url").value.includes("127.0.0.1:3003")) {
+      $("setting-base-url").value =
+        kind === "lumo"
+          ? "http://127.0.0.1:3003/v1"
+          : kind === "deepseek"
+            ? "https://api.deepseek.com/v1"
+            : "";
+    }
+    if (!$("setting-provider-model").value.trim()) {
+      $("setting-provider-model").value =
+        kind === "lumo" ? "lumo" : kind === "deepseek" ? "deepseek-flash" : "";
+    }
+  });
   $("add-provider").addEventListener("click", addProviderFromSettings);
   $("remove-provider").addEventListener("click", removeProviderFromSettings);
   $("import-opencode-providers").addEventListener(
@@ -4574,7 +4592,8 @@ async function importOpenCodeProviders() {
     for (const candidate of imported) {
       const existing = app.providers.find(
         (provider) =>
-          provider.id === candidate.id || provider.kind === candidate.kind
+          provider.id === candidate.id ||
+          (candidate.kind !== "openai" && provider.kind === candidate.kind)
       );
       if (existing) {
         if (!existing.apiKey && candidate.apiKey) existing.apiKey = candidate.apiKey;

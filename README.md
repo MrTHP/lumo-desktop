@@ -4,7 +4,7 @@
   <p><strong>Un client desktop local-first pour Proton Lumo.</strong><br />
   <em>A local-first desktop client for Proton Lumo.</em></p>
   <p>
-    <a href="https://github.com/MrTHP/lumo-desktop/releases/latest/download/Lumo-Desktop_0.1.0_amd64.AppImage"><img src="https://img.shields.io/badge/Download-AppImage-8b5cf6?style=for-the-badge&logo=linux&logoColor=white" alt="Download AppImage" /></a>
+    <a href="https://github.com/MrTHP/lumo-desktop/releases/latest/download/Lumo-Desktop_0.2.0_amd64.AppImage"><img src="https://img.shields.io/badge/Download-AppImage-8b5cf6?style=for-the-badge&logo=linux&logoColor=white" alt="Download AppImage" /></a>
     <a href="https://mrthp.github.io/lumo-desktop/"><img src="https://img.shields.io/badge/Demo-GitHub%20Pages-2dd4bf?style=for-the-badge&logo=githubpages&logoColor=white" alt="Demo" /></a>
     <a href="https://github.com/MrTHP/lumo-desktop"><img src="https://img.shields.io/badge/Source-GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
   </p>
@@ -15,7 +15,7 @@
     <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT" />
   </p>
   <p><a href="#-français">🇫🇷 Français</a> · <a href="#-english">🇬🇧 English</a></p>
-  <p><strong>Démo en ligne / Live demo :</strong> <a href="https://mrthp.github.io/lumo-desktop/">mrthp.github.io/lumo-desktop</a> · <strong>Releases :</strong> <a href="https://github.com/MrTHP/lumo-desktop/releases">v0.1.0</a></p>
+  <p><strong>Démo en ligne / Live demo :</strong> <a href="https://mrthp.github.io/lumo-desktop/">mrthp.github.io/lumo-desktop</a> · <strong>Releases :</strong> <a href="https://github.com/MrTHP/lumo-desktop/releases">v0.2.0</a></p>
   <img src="docs/screenshots/chat.png" width="100%" alt="Lumo Desktop" />
 </div>
 
@@ -63,8 +63,8 @@ L'interface suit la langue du système (français ou anglais), les conversations
 Télécharge l'**AppImage** ou le paquet **.deb** depuis la page [Releases](https://github.com/MrTHP/lumo-desktop/releases/latest).
 
 ```sh
-chmod +x Lumo-Desktop_0.1.0_amd64.AppImage
-./Lumo-Desktop_0.1.0_amd64.AppImage
+chmod +x Lumo-Desktop_0.2.0_amd64.AppImage
+./Lumo-Desktop_0.2.0_amd64.AppImage
 ```
 
 Au premier lancement, si `lumo-tamer` n'est pas joignable, l'assistant propose de l'installer :
@@ -180,8 +180,8 @@ The UI follows your system language (French or English), conversations stay in `
 Download the **AppImage** or **.deb** from the [Releases](https://github.com/MrTHP/lumo-desktop/releases/latest) page.
 
 ```sh
-chmod +x Lumo-Desktop_0.1.0_amd64.AppImage
-./Lumo-Desktop_0.1.0_amd64.AppImage
+chmod +x Lumo-Desktop_0.2.0_amd64.AppImage
+./Lumo-Desktop_0.2.0_amd64.AppImage
 ```
 
 On first launch, if `lumo-tamer` is unreachable, the assistant offers to install it:

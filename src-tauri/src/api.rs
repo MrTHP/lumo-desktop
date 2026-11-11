@@ -1135,8 +1135,7 @@ fn http_error(lang: &str, status: u16, body: &str) -> String {
 }
 
 fn friendly_network_error(url: &str, error: &reqwest::Error, lang: &str) -> String {
-    let is_local_tamer =
-        url.contains("3003") || url.contains("127.0.0.1") || url.contains("localhost");
+    let is_local_tamer = url.contains("3003");
     if error.is_connect() {
         if is_local_tamer {
             format!(
