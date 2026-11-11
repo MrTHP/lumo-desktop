@@ -30,8 +30,8 @@
     "active": true,
     "targets": ["deb", "appimage"],
     "category": "Utility",
-    "shortDescription": "Client desktop pour Lumo via lumo-tamer",
-    "longDescription": "Client de chat desktop pour Lumo, connecté à l'API OpenAI-compatible de lumo-tamer.",
+    "shortDescription": "Client de chat multi-fournisseurs (Lumo, DeepSeek, OpenCode)",
+    "longDescription": "Client de chat desktop Rust/Tauri pour Lumo Tamer, l'API DeepSeek et l'agent OpenCode.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

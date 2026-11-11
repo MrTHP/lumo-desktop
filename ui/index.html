@@ -66,6 +66,10 @@
           <svg viewBox="0 0 24 24"><path d="M4 19V5a2 2 0 0 1 2-2h12v18H6a2 2 0 0 1-2-2Z"/><path d="M8 3v18"/></svg>
           <span data-i18n="sidebar.library">Library</span>
         </button>
+        <button id="nav-agent" class="side-nav">
+          <svg viewBox="0 0 24 24"><path d="M8 3h8l2 4 4 2v6l-4 2-2 4H8l-2-4-4-2V9l4-2 2-4Z"/><circle cx="12" cy="12" r="3"/></svg>
+          <span data-i18n="sidebar.agent">Agent OpenCode</span>
+        </button>
       </div>
 
       <div class="sidebar-heading">
@@ -115,7 +119,12 @@
         </button>
 
         <div class="model-controls">
-          <label class="select-wrap" data-i18n-title="topbar.model" title="Modèle Lumo">
+          <label class="select-wrap provider-select-wrap" data-i18n-title="topbar.provider" title="Fournisseur">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></svg>
+            <select id="provider-select" data-i18n-aria-label="topbar.provider" aria-label="Fournisseur"></select>
+            <svg class="chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg>
+          </label>
+          <label class="select-wrap" data-i18n-title="topbar.model" title="Modèle">
             <svg viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7l-8-4Z"/><path d="m4 7 8 4 8-4M12 21V11"/></svg>
             <select id="model-select" data-i18n-aria-label="topbar.model" aria-label="Modèle"></select>
             <svg class="chevron" viewBox="0 0 24 24"><path d="m7 10 5 5 5-5"/></svg>
@@ -153,6 +162,14 @@
         </div>
       </div>
 
+      <div id="agent-banner" class="agent-banner hidden">
+        <span class="agent-badge">AGENT</span>
+        <span class="agent-title">OpenCode</span>
+        <code id="agent-workspace"></code>
+        <span id="agent-model-label" class="agent-model"></span>
+        <button type="button" id="agent-settings-btn" class="btn-ghost small" data-i18n="agent.configure">Configurer</button>
+      </div>
+
       <section id="chat-scroll" aria-live="polite">
         <div id="welcome" class="welcome">
           <div class="welcome-orb">
@@ -166,8 +183,8 @@
               </svg>
             </div>
           </div>
-          <h1><span data-i18n="welcome.hello">Bonjour, je suis</span> <span class="accent">Lumo</span>.</h1>
-          <p data-i18n="welcome.subtitle">Ton assistant privé, propulsé par Proton Lumo via lumo-tamer.</p>
+          <h1><span id="welcome-hello" data-i18n="welcome.hello">Bonjour, je suis</span> <span id="welcome-name" class="accent">Lumo</span>.</h1>
+          <p id="welcome-subtitle" data-i18n="welcome.subtitle">Ton assistant privé, propulsé par Proton Lumo via lumo-tamer.</p>
           <div class="suggestions" id="suggestions">
             <button class="suggestion" data-prompt="Explique-moi les bases de Rust en 10 points clés.">
               <span class="suggestion-icon">🌱</span>
@@ -188,7 +205,7 @@
           </div>
           <div class="welcome-foot">
             <span class="privacy-dot"></span>
-            <span data-i18n="welcome.privacy">Conversations stockées localement · jamais envoyées ailleurs qu'à Proton Lumo</span>
+            <span id="welcome-privacy" data-i18n="welcome.privacy">Conversations stockées localement · jamais envoyées ailleurs qu'à Proton Lumo</span>
           </div>
         </div>
 
@@ -254,7 +271,7 @@
             </button>
           </div>
         </div>
-        <div class="disclaimer" data-i18n="composer.disclaimer">Lumo peut se tromper. Tes conversations restent sur ta machine.</div>
+        <div id="composer-disclaimer" class="disclaimer" data-i18n="composer.disclaimer">Lumo peut se tromper. Tes conversations restent sur ta machine.</div>
       </footer>
 
       <section id="all-chats-view" class="page-view hidden">
@@ -350,22 +367,72 @@
         <button type="button" class="settings-tab" data-settings-tab="memory" data-i18n="settings.tab.memory">Mémoire</button>
         <button type="button" class="settings-tab" data-settings-tab="general" data-i18n="settings.tab.general">Général</button>
         <button type="button" class="settings-tab" data-settings-tab="tools" data-i18n="settings.tab.tools">Outils</button>
+        <button type="button" class="settings-tab" data-settings-tab="agent" data-i18n="settings.tab.agent">Agent</button>
       </div>
 
       <div class="settings-pane" data-settings-pane="connection">
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <h3 data-i18n="settings.providerSection">Fournisseur</h3>
+            <span id="provider-kind-badge" class="badge">lumo</span>
+          </div>
+          <div class="field">
+            <label for="setting-provider-select" data-i18n="settings.providerActive">Fournisseur actif</label>
+            <div class="input-with-button">
+              <select id="setting-provider-select"></select>
+              <button type="button" id="add-provider" class="btn-ghost small" data-i18n="settings.providerAdd">Ajouter</button>
+              <button type="button" id="remove-provider" class="btn-ghost small" data-i18n="settings.providerRemove">Supprimer</button>
+            </div>
+            <small data-i18n="settings.providerActiveHint">Le fournisseur sélectionné devient actif après Enregistrer.</small>
+            <small id="provider-detected-hint" class="settings-hint"></small>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="setting-provider-name" data-i18n="settings.providerName">Nom</label>
+              <input id="setting-provider-name" type="text" placeholder="DeepSeek">
+            </div>
+            <div class="field">
+              <label for="setting-provider-kind" data-i18n="settings.providerKind">Type</label>
+              <select id="setting-provider-kind">
+                <option value="lumo">Lumo Tamer</option>
+                <option value="deepseek">DeepSeek</option>
+                <option value="openai">OpenAI-compatible</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="setting-provider-model" data-i18n="settings.providerModel">Modèle par défaut</label>
+            <input id="setting-provider-model" type="text" placeholder="deepseek-flash">
+            <small data-i18n="settings.providerModelHint">Utilisé quand tu ouvres une nouvelle conversation avec ce fournisseur.</small>
+          </div>
+          <div class="field-row">
+            <label class="check">
+              <input id="setting-provider-thinking" type="checkbox">
+              <span data-i18n="settings.providerThinking">Prend en charge la réflexion</span>
+            </label>
+            <label class="check">
+              <input id="setting-provider-tools" type="checkbox">
+              <span data-i18n="settings.providerTools">Prend en charge les outils</span>
+            </label>
+          </div>
+          <button type="button" id="import-opencode-providers" class="btn-ghost settings-install-button" data-i18n="settings.importOpenCode">
+            Importer les fournisseurs OpenCode
+          </button>
+        </section>
+
         <div class="field">
           <label for="setting-base-url" data-i18n="settings.apiUrl">URL de l'API</label>
           <input id="setting-base-url" type="url" placeholder="http://127.0.0.1:3003/v1" required>
-          <small data-i18n="settings.apiUrlHint">L'endpoint OpenAI-compatible de lumo-tamer (généralement …/v1).</small>
+          <small data-i18n="settings.apiUrlHint">L'endpoint OpenAI-compatible du fournisseur sélectionné (généralement …/v1).</small>
         </div>
 
         <div class="field">
           <label for="setting-api-key" data-i18n="settings.apiKey">Clé API</label>
           <div class="input-with-button">
-            <input id="setting-api-key" type="password" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholder" placeholder="Clé définie dans config.yaml">
+            <input id="setting-api-key" type="password" autocomplete="off" data-i18n-placeholder="settings.apiKeyPlaceholder" placeholder="Clé API du fournisseur">
             <button type="button" id="toggle-key" class="btn-ghost small" data-i18n="settings.show">Afficher</button>
           </div>
-          <small data-i18n="settings.apiKeyHint">Récupérée automatiquement depuis ta config OpenCode si disponible.</small>
+          <small data-i18n="settings.apiKeyHint">Détectée depuis OpenCode quand c'est possible, sinon saisie manuelle.</small>
         </div>
 
         <div class="field">
@@ -545,6 +612,49 @@
 
             <p class="warning" data-i18n="settings.toolsWarning">Les commandes shell s'exécutent avec ton compte utilisateur et peuvent accéder à tout ce à quoi il a accès. Active-les seulement si tu fais confiance au modèle.</p>
           </div>
+        </section>
+      </div>
+
+      <div class="settings-pane hidden" data-settings-pane="agent">
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <h3 data-i18n="settings.agentSection">OpenCode (agent local)</h3>
+            <span class="badge" data-i18n="settings.localBadge">local</span>
+          </div>
+          <p class="settings-hint" data-i18n="settings.agentHint">
+            L'agent lance OpenCode dans un dossier projet. Il peut lire, modifier et exécuter des commandes avec les permissions configurées dans OpenCode.
+          </p>
+          <div class="field">
+            <label for="setting-opencode-binary" data-i18n="settings.opencodeBinary">Binaire OpenCode</label>
+            <input id="setting-opencode-binary" type="text" placeholder="opencode">
+            <small data-i18n="settings.opencodeBinaryHint">Nom trouvé dans le PATH ou chemin absolu vers l'exécutable.</small>
+          </div>
+          <div class="field">
+            <label for="setting-opencode-workspace" data-i18n="settings.opencodeWorkspace">Dossier de travail de l'agent</label>
+            <input id="setting-opencode-workspace" type="text" placeholder="/home/moi/Projects/mon-projet">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="setting-opencode-model" data-i18n="settings.opencodeModel">Modèle OpenCode</label>
+              <select id="setting-opencode-model"></select>
+            </div>
+            <div class="field">
+              <label for="setting-opencode-agent" data-i18n="settings.opencodeAgent">Agent</label>
+              <select id="setting-opencode-agent">
+                <option value="build">build</option>
+                <option value="plan">plan</option>
+              </select>
+            </div>
+          </div>
+          <button type="button" id="refresh-opencode-models" class="btn-ghost" data-i18n="settings.opencodeRefresh">Actualiser les modèles OpenCode</button>
+          <label class="check-row">
+            <input type="checkbox" id="setting-opencode-auto">
+            <span data-i18n="settings.opencodeAuto">Auto-approuver les permissions OpenCode (lecture, écriture, commandes)</span>
+          </label>
+          <p class="warning" data-i18n="settings.opencodeWarning">
+            L'auto-approbation donne à l'agent les mêmes droits que ton compte utilisateur. Désactive-la si tu veux valider chaque action dans OpenCode.
+          </p>
+          <div id="opencode-status" class="settings-hint"></div>
         </section>
       </div>
 

@@ -24,6 +24,10 @@ const app = {
   conversations: [],
   activeId: null,
   models: [],
+  providers: [],
+  activeProvider: "",
+  agentModels: [],
+  agentStatus: null,
   streaming: false,
   activeRequestId: null,
   activeAssistantId: null,
@@ -65,6 +69,9 @@ let conversationsSaveTimer = null;
 let streamFrame = null;
 let stickToBottom = true;
 let lastStreamPersist = 0;
+let settingsProviderId = "";
+let settingsSnapshot = null;
+let settingsSaved = false;
 
 /* --------------------------------------------------------------------------
  * Boot
@@ -85,13 +92,16 @@ async function boot() {
   app.systemLanguage = initial.systemLanguage === "fr" ? "fr" : "en";
   app.language = resolveLanguage(app.settings.language);
   app.dataDir = initial.dataDir || "";
+  ensureProviders();
   app.conversations = Array.isArray(initial.conversations)
     ? initial.conversations.map(normalizeConversation)
     : [];
 
   applyTheme();
   applyTranslations();
+  updateWelcome();
   $("health-label").textContent = t("health.connecting");
+  refreshProviderSelect();
   refreshModelSelect();
   renderSidebar();
   renderProjectList();
@@ -104,6 +114,7 @@ async function boot() {
   refreshWebSearch();
 
   await listen("chat-event", onChatEvent);
+  await listen("agent-event", onAgentEvent);
   await listen("tray-new-chat", () => newChat());
   await listen("tamer-install-event", onInstallEvent);
 
@@ -135,11 +146,13 @@ async function boot() {
   try {
     const devPrompt = await invoke("get_dev_prompt");
     if (devPrompt) {
+      const devAgent = await invoke("get_dev_agent");
+      if (devAgent) await newAgentChat();
       const input = $("input");
       input.value = devPrompt;
       autoGrow();
       updateComposerState();
-      setTimeout(() => sendMessage(), 600);
+      setTimeout(() => sendMessage(), 800);
     }
   } catch (error) {
     console.warn("get_dev_prompt", error);
@@ -148,6 +161,7 @@ async function boot() {
   refreshHealth();
   refreshTamerStatus();
   refreshModels();
+  refreshOpenCodeStatus();
 
   setInterval(() => refreshHealth({ quiet: true }), 45000);
 
@@ -185,7 +199,262 @@ function defaultSettings() {
     projectFilesAccess: "current",
     creationsEnabled: true,
     visualizationsEnabled: true,
+    providers: [],
+    activeProvider: "",
+    opencodeBinary: "opencode",
+    opencodeWorkspace: "",
+    opencodeModel: "deepseek/deepseek-flash",
+    opencodeAgent: "build",
+    opencodeAuto: true,
   };
+}
+
+/* --------------------------------------------------------------------------
+ * Providers
+ * ----------------------------------------------------------------------- */
+
+function ensureProviders() {
+  if (!app.settings) return;
+  let list = Array.isArray(app.settings.providers)
+    ? app.settings.providers.filter(Boolean)
+    : [];
+
+  if (!list.length) {
+    list = [
+      {
+        id: "lumo",
+        name: "Lumo (Proton local)",
+        kind: "lumo",
+        baseUrl: app.settings.baseUrl || "http://127.0.0.1:3003/v1",
+        apiKey: app.settings.apiKey || "",
+        model: app.settings.model || "lumo",
+        models: ["lumo", "lumo-lite", "lumo-max"],
+        supportsThinking: true,
+        supportsTools: true,
+      },
+    ];
+  }
+
+  list = list.map((provider, index) => {
+    const kind = ["lumo", "deepseek", "openai"].includes(provider.kind)
+      ? provider.kind
+      : "openai";
+    const fallbackModel =
+      kind === "lumo" ? "lumo" : kind === "deepseek" ? "deepseek-flash" : "";
+    return {
+      id: provider.id || `provider-${index + 1}`,
+      name: provider.name || provider.id || `Fournisseur ${index + 1}`,
+      kind,
+      baseUrl: normalizeBaseUrl(
+        provider.baseUrl ||
+          (kind === "lumo"
+            ? "http://127.0.0.1:3003/v1"
+            : kind === "deepseek"
+              ? "https://api.deepseek.com/v1"
+              : "")
+      ),
+      apiKey: provider.apiKey || "",
+      model: provider.model || fallbackModel,
+      models: Array.isArray(provider.models)
+        ? provider.models.filter((model) => typeof model === "string" && model.trim())
+        : [],
+      supportsThinking: Boolean(provider.supportsThinking),
+      supportsTools: provider.supportsTools !== false,
+    };
+  });
+
+  app.settings.providers = list;
+  app.providers = list;
+
+  if (!list.some((provider) => provider.id === app.settings.activeProvider)) {
+    app.settings.activeProvider =
+      list.find((provider) => provider.kind === "lumo")?.id || list[0]?.id || "";
+  }
+  app.activeProvider = app.settings.activeProvider;
+  syncLegacyFromActive();
+}
+
+function activeProvider() {
+  const id = app.settings?.activeProvider || app.activeProvider;
+  return app.providers.find((provider) => provider.id === id) || app.providers[0] || null;
+}
+
+function providerById(id) {
+  return app.providers.find((provider) => provider.id === id) || null;
+}
+
+function providerKindLabel(kind) {
+  if (kind === "lumo") return "Lumo Tamer";
+  if (kind === "deepseek") return "DeepSeek";
+  return "OpenAI-compatible";
+}
+
+function syncLegacyFromActive() {
+  const provider = activeProvider();
+  if (!provider) return;
+  app.settings.baseUrl = provider.baseUrl;
+  app.settings.apiKey = provider.apiKey;
+  app.settings.model = provider.model || app.settings.model;
+  app.activeProvider = provider.id;
+}
+
+function refreshProviderSelect() {
+  const select = $("provider-select");
+  if (!select) return;
+  const conversation = activeConversation();
+  const agentMode = conversation?.mode === "agent";
+
+  select.innerHTML = "";
+  for (const provider of app.providers) {
+    const option = document.createElement("option");
+    option.value = provider.id;
+    option.textContent = provider.name;
+    select.appendChild(option);
+  }
+  select.value = app.settings.activeProvider || app.activeProvider;
+  select.disabled = app.streaming || agentMode;
+  select.closest("label")?.classList.toggle("hidden", agentMode);
+}
+
+async function onProviderChange(id) {
+  if (app.streaming) return;
+  const provider = providerById(id);
+  if (!provider) return;
+
+  app.settings.activeProvider = provider.id;
+  app.activeProvider = provider.id;
+  syncLegacyFromActive();
+  app.settings.thinking =
+    provider.kind === "lumo" && Boolean(provider.supportsThinking);
+  if (provider.model) app.settings.model = provider.model;
+
+  const conversation = activeConversation();
+  if (conversation && conversation.mode !== "agent") {
+    conversation.model = provider.model || conversation.model;
+    conversation.thinking = Boolean(provider.supportsThinking && conversation.thinking);
+    conversation.updatedAt = Date.now();
+  }
+
+  persistSettings();
+  persistConversations();
+  refreshProviderSelect();
+  refreshModelSelect();
+  updateComposerState();
+  await refreshModels();
+  await refreshHealth({ quiet: true });
+}
+
+async function refreshOpenCodeModels() {
+  try {
+    app.agentModels = await invoke("list_opencode_models", {
+      settings: app.settings,
+    });
+  } catch (error) {
+    app.agentModels = [];
+    console.warn("list_opencode_models", error);
+    if (app.settings.opencodeModel) {
+      app.agentModels = [
+        { id: app.settings.opencodeModel, name: app.settings.opencodeModel },
+      ];
+    }
+  }
+  refreshAgentModelOptions();
+  refreshModelSelect();
+  return app.agentModels;
+}
+
+async function refreshOpenCodeStatus() {
+  try {
+    app.agentStatus = await invoke("opencode_status", {
+      settings: app.settings,
+    });
+  } catch (error) {
+    console.warn("opencode_status", error);
+    app.agentStatus = null;
+  }
+
+  const status = $("opencode-status");
+  if (!status) return app.agentStatus;
+  if (!app.agentStatus) {
+    status.textContent = t("agent.statusUnknown");
+  } else if (!app.agentStatus.installed) {
+    status.textContent = t("agent.statusMissing");
+  } else {
+    status.textContent = t("agent.statusReady", {
+      path: app.agentStatus.path || "opencode",
+      version: app.agentStatus.version || "?",
+    });
+  }
+  return app.agentStatus;
+}
+
+function refreshAgentModelOptions() {
+  const select = $("setting-opencode-model");
+  if (!select) return;
+  const current = app.settings.opencodeModel || agentDefaultModel();
+  select.innerHTML = "";
+  const ids = app.agentModels.length
+    ? app.agentModels.map((model) => model.id)
+    : current
+      ? [current]
+      : [];
+  for (const id of ids) {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = id;
+    select.appendChild(option);
+  }
+  if (current && !ids.includes(current)) {
+    const option = document.createElement("option");
+    option.value = current;
+    option.textContent = current;
+    select.appendChild(option);
+  }
+  select.value = current;
+}
+
+function updateAgentBanner() {
+  const conversation = activeConversation();
+  const agentMode = conversation?.mode === "agent";
+  $("agent-banner").classList.toggle("hidden", !agentMode);
+  $("nav-agent").classList.toggle("active", Boolean(agentMode));
+  if (!agentMode) return;
+  $("agent-workspace").textContent =
+    conversation.agentWorkspace ||
+    app.settings.opencodeWorkspace ||
+    app.settings.workspace ||
+    "—";
+  $("agent-model-label").textContent = `${conversation.model || agentDefaultModel()}${
+    app.settings.opencodeAgent ? ` · ${app.settings.opencodeAgent}` : ""
+  }`;
+}
+
+function updateWelcome() {
+  const provider = activeProvider();
+  const conversation = activeConversation();
+  const agentMode = conversation?.mode === "agent";
+  const providerName = (provider?.name || "Lumo").replace(/\s*\(.*\)$/, "");
+  const name = agentMode ? "OpenCode" : providerName;
+
+  $("welcome-name").textContent = name;
+  if (agentMode) {
+    $("welcome-subtitle").textContent = t("welcome.agentSubtitle");
+    $("welcome-privacy").textContent = t("welcome.agentPrivacy");
+    $("input").placeholder = t("composer.agentPlaceholder");
+  } else {
+    $("welcome-subtitle").textContent =
+      provider?.kind === "lumo"
+        ? t("welcome.subtitle")
+        : t("welcome.subtitleProvider", { provider: providerName });
+    $("welcome-privacy").textContent =
+      provider?.kind === "lumo"
+        ? t("welcome.privacy")
+        : t("welcome.privacyProvider", { provider: providerName });
+    $("input").placeholder = t("composer.placeholderProvider", {
+      provider: providerName,
+    });
+  }
+  $("composer-disclaimer").textContent = t("composer.disclaimerGeneric");
 }
 
 /* --------------------------------------------------------------------------
@@ -196,8 +465,10 @@ const I18N = {
   fr: {
     "health.connecting": "Connexion…",
     "health.connected": "Lumo connecté",
+    "health.providerConnected": "{provider} connecté",
     "health.authExpired": "Auth Proton expirée",
     "health.offline": "lumo-tamer hors ligne",
+    "health.providerOffline": "{provider} hors ligne",
 
     "offline.title": "lumo-tamer est injoignable",
     "offline.detail": "Vérifie que le conteneur est démarré.",
@@ -222,16 +493,31 @@ const I18N = {
     "sidebar.projects": "Projets",
     "sidebar.recent": "Récent",
     "sidebar.localAccount": "Compte local",
+    "sidebar.agent": "Agent OpenCode",
+    "account.defaultName": "Utilisateur local",
 
-    "topbar.model": "Modèle Lumo",
+    "topbar.provider": "Fournisseur",
+    "topbar.model": "Modèle",
     "topbar.thinking": "Activer la réflexion étendue (plus lent, plus précis)",
     "topbar.thinkingLabel": "Réflexion",
     "topbar.export": "Copier la conversation en Markdown",
     "topbar.theme": "Changer de thème",
     "scrollBottom": "Aller en bas",
 
+    "agent.newChat": "Nouvel agent OpenCode",
+    "agent.configure": "Configurer",
+    "agent.statusUnknown": "État d'OpenCode inconnu.",
+    "agent.statusMissing": "OpenCode est introuvable. Indique son chemin dans les réglages.",
+    "agent.statusReady": "OpenCode prêt · {path} · {version}",
+    "agent.workspace": "Dossier",
+    "agent.notConfigured": "Choisis un dossier de travail dans les réglages Agent.",
+
     "welcome.hello": "Bonjour, je suis",
     "welcome.subtitle": "Ton assistant privé, propulsé par Proton Lumo via lumo-tamer.",
+    "welcome.subtitleProvider": "Connecté à {provider}. Tes conversations restent sur ta machine.",
+    "welcome.privacyProvider": "Conversations stockées localement · envoyées à {provider} pour générer les réponses",
+    "welcome.agentSubtitle": "L'agent OpenCode lit, modifie et exécute des commandes dans ton dossier projet.",
+    "welcome.agentPrivacy": "OpenCode exécute les actions localement · vérifie le dossier de travail avant de lancer une tâche",
     "welcome.s1.title": "Découvrir Rust",
     "welcome.s1.sub": "Les bases en 10 points clés",
     "welcome.s2.title": "Un script Python",
@@ -243,9 +529,12 @@ const I18N = {
     "welcome.privacy": "Conversations stockées localement · jamais envoyées ailleurs qu'à Proton Lumo",
 
     "composer.placeholder": "Écris un message à Lumo…",
+    "composer.placeholderProvider": "Écris un message à {provider}…",
+    "composer.agentPlaceholder": "Décris une tâche pour l'agent OpenCode…",
     "composer.stop": "Arrêter",
     "composer.send": "Envoyer",
     "composer.disclaimer": "Lumo peut se tromper. Tes conversations restent sur ta machine.",
+    "composer.disclaimerGeneric": "L'IA peut se tromper. Tes conversations restent sur ta machine.",
     "composer.thinkingActive": "réflexion active",
     "composer.message": "Message",
     "composer.attach": "Joindre un fichier",
@@ -267,12 +556,12 @@ const I18N = {
     "composer.kind.binary": "binaire",
 
     "settings.title": "Paramètres",
-    "settings.subtitle": "Connexion à ton instance lumo-tamer.",
+    "settings.subtitle": "Connexion aux fournisseurs d'IA et à OpenCode.",
     "settings.close": "Fermer",
     "settings.apiUrl": "URL de l'API",
-    "settings.apiUrlHint": "L'endpoint OpenAI-compatible de lumo-tamer (généralement …/v1).",
+    "settings.apiUrlHint": "L'endpoint OpenAI-compatible du fournisseur sélectionné (généralement …/v1).",
     "settings.apiKey": "Clé API",
-    "settings.apiKeyHint": "Récupérée automatiquement depuis ta config OpenCode si disponible.",
+    "settings.apiKeyHint": "Détectée depuis OpenCode quand c'est possible, sinon saisie manuelle.",
     "settings.apiKeyPlaceholder": "Clé définie dans config.yaml",
     "settings.show": "Afficher",
     "settings.hide": "Masquer",
@@ -287,9 +576,37 @@ const I18N = {
     "settings.tamerDir": "Dossier lumo-tamer",
     "settings.tamerRepo": "Dépôt source",
     "settings.installTamer": "Installer ou connecter lumo-tamer",
+    "settings.providerSection": "Fournisseur",
+    "settings.providerActive": "Fournisseur",
+    "settings.providerActiveHint": "Le fournisseur sélectionné devient actif après Enregistrer.",
+    "settings.providerAdd": "Ajouter",
+    "settings.providerRemove": "Supprimer",
+    "settings.providerName": "Nom",
+    "settings.providerKind": "Type",
+    "settings.providerModel": "Modèle par défaut",
+    "settings.providerModelHint": "Utilisé quand tu ouvres une nouvelle conversation avec ce fournisseur.",
+    "settings.providerThinking": "Prend en charge la réflexion",
+    "settings.providerTools": "Prend en charge les outils",
+    "settings.importOpenCode": "Importer les fournisseurs OpenCode",
+    "settings.agentSection": "OpenCode (agent local)",
+    "settings.agentHint": "L'agent lance OpenCode dans un dossier projet. Il peut lire, modifier et exécuter des commandes avec les permissions configurées dans OpenCode.",
+    "settings.opencodeBinary": "Binaire OpenCode",
+    "settings.opencodeBinaryHint": "Nom trouvé dans le PATH ou chemin absolu vers l'exécutable.",
+    "settings.opencodeWorkspace": "Dossier de travail de l'agent",
+    "settings.opencodeModel": "Modèle OpenCode",
+    "settings.opencodeAgent": "Agent",
+    "settings.opencodeRefresh": "Actualiser les modèles OpenCode",
+    "settings.opencodeAuto": "Auto-approuver les permissions OpenCode (lecture, écriture, commandes)",
+    "settings.opencodeWarning": "L'auto-approbation donne à l'agent les mêmes droits que ton compte utilisateur. Désactive-la si tu veux valider chaque action dans OpenCode.",
+    "settings.providerImported": "Fournisseurs OpenCode importés",
+    "settings.providerRemoved": "Fournisseur supprimé",
+    "settings.providerDetected": "Détecté depuis {path}",
+    "settings.providerNewName": "Nouveau fournisseur",
+    "settings.providerKeepOne": "Garde au moins un fournisseur",
+    "settings.providerImportEmpty": "Aucun fournisseur OpenCode à importer",
     "settings.toolsSection": "Outils et fichiers",
     "settings.localBadge": "local",
-    "settings.toolsEnabled": "Autoriser Lumo à utiliser des outils",
+    "settings.toolsEnabled": "Autoriser le modèle à utiliser des outils",
     "settings.allowRead": "Lire des fichiers et dossiers",
     "settings.allowWrite": "Écrire ou modifier des fichiers",
     "settings.allowShell": "Exécuter des commandes shell",
@@ -300,8 +617,8 @@ const I18N = {
     "settings.toolsWarning": "Les commandes shell s'exécutent avec ton compte utilisateur et peuvent accéder à tout ce à quoi il a accès. Active-les seulement si tu fais confiance au modèle.",
     "settings.test": "Tester la connexion",
     "settings.testing": "Test en cours…",
-    "settings.testOk": "✓ Connecté · auth Proton valide\n{models}",
-    "settings.testAuthBad": "lumo-tamer répond, mais la session Proton n'est pas valide. Ré-authentifie le conteneur.",
+    "settings.testOk": "✓ Connecté\n{models}",
+    "settings.testAuthBad": "Le fournisseur répond, mais l'authentification a échoué.",
     "settings.cancel": "Annuler",
     "settings.save": "Enregistrer",
     "settings.dataDir": "Données locales :",
@@ -312,6 +629,7 @@ const I18N = {
     "settings.tab.memory": "Mémoire",
     "settings.tab.general": "Général",
     "settings.tab.tools": "Outils",
+    "settings.tab.agent": "Agent",
 
     "pages.allChats": "Toutes les conversations",
     "pages.allChatsSub": "Toutes tes conversations, classées par projet.",
@@ -539,8 +857,10 @@ const I18N = {
   en: {
     "health.connecting": "Connecting…",
     "health.connected": "Lumo connected",
+    "health.providerConnected": "{provider} connected",
     "health.authExpired": "Proton auth expired",
     "health.offline": "lumo-tamer offline",
+    "health.providerOffline": "{provider} offline",
 
     "offline.title": "lumo-tamer is unreachable",
     "offline.detail": "Make sure the container is running.",
@@ -565,16 +885,31 @@ const I18N = {
     "sidebar.projects": "Projects",
     "sidebar.recent": "Recent",
     "sidebar.localAccount": "Local account",
+    "sidebar.agent": "OpenCode agent",
+    "account.defaultName": "Local user",
 
-    "topbar.model": "Lumo model",
+    "topbar.provider": "Provider",
+    "topbar.model": "Model",
     "topbar.thinking": "Enable extended thinking (slower, more accurate)",
     "topbar.thinkingLabel": "Thinking",
     "topbar.export": "Copy conversation as Markdown",
     "topbar.theme": "Toggle theme",
     "scrollBottom": "Scroll to bottom",
 
+    "agent.newChat": "New OpenCode agent",
+    "agent.configure": "Configure",
+    "agent.statusUnknown": "OpenCode status unknown.",
+    "agent.statusMissing": "OpenCode was not found. Set its path in settings.",
+    "agent.statusReady": "OpenCode ready · {path} · {version}",
+    "agent.workspace": "Workspace",
+    "agent.notConfigured": "Choose a workspace in the Agent settings.",
+
     "welcome.hello": "Hi, I'm",
     "welcome.subtitle": "Your private assistant, powered by Proton Lumo via lumo-tamer.",
+    "welcome.subtitleProvider": "Connected to {provider}. Your conversations stay on your machine.",
+    "welcome.privacyProvider": "Conversations stored locally · sent to {provider} to generate replies",
+    "welcome.agentSubtitle": "The OpenCode agent can read, edit and run commands inside your project folder.",
+    "welcome.agentPrivacy": "OpenCode runs actions locally · check the workspace before starting a task",
     "welcome.s1.title": "Discover Rust",
     "welcome.s1.sub": "The basics in 10 key points",
     "welcome.s2.title": "A Python script",
@@ -586,9 +921,12 @@ const I18N = {
     "welcome.privacy": "Conversations stored locally · never sent anywhere except Proton Lumo",
 
     "composer.placeholder": "Message Lumo…",
+    "composer.placeholderProvider": "Message {provider}…",
+    "composer.agentPlaceholder": "Describe a task for the OpenCode agent…",
     "composer.stop": "Stop",
     "composer.send": "Send",
     "composer.disclaimer": "Lumo can make mistakes. Your conversations stay on your machine.",
+    "composer.disclaimerGeneric": "AI can make mistakes. Your conversations stay on your machine.",
     "composer.thinkingActive": "thinking active",
     "composer.message": "Message",
     "composer.attach": "Attach a file",
@@ -610,12 +948,12 @@ const I18N = {
     "composer.kind.binary": "binary",
 
     "settings.title": "Settings",
-    "settings.subtitle": "Connection to your lumo-tamer instance.",
+    "settings.subtitle": "Connect AI providers and OpenCode.",
     "settings.close": "Close",
     "settings.apiUrl": "API URL",
-    "settings.apiUrlHint": "The OpenAI-compatible endpoint of lumo-tamer (usually …/v1).",
+    "settings.apiUrlHint": "The OpenAI-compatible endpoint of the selected provider (usually …/v1).",
     "settings.apiKey": "API key",
-    "settings.apiKeyHint": "Automatically read from your OpenCode config when available.",
+    "settings.apiKeyHint": "Detected from OpenCode when possible, otherwise entered manually.",
     "settings.apiKeyPlaceholder": "Key defined in config.yaml",
     "settings.show": "Show",
     "settings.hide": "Hide",
@@ -630,9 +968,37 @@ const I18N = {
     "settings.tamerDir": "lumo-tamer directory",
     "settings.tamerRepo": "Source repository",
     "settings.installTamer": "Install or connect lumo-tamer",
+    "settings.providerSection": "Provider",
+    "settings.providerActive": "Provider",
+    "settings.providerActiveHint": "The selected provider becomes active after you save.",
+    "settings.providerAdd": "Add",
+    "settings.providerRemove": "Remove",
+    "settings.providerName": "Name",
+    "settings.providerKind": "Type",
+    "settings.providerModel": "Default model",
+    "settings.providerModelHint": "Used when you start a new conversation with this provider.",
+    "settings.providerThinking": "Supports reasoning",
+    "settings.providerTools": "Supports tools",
+    "settings.importOpenCode": "Import OpenCode providers",
+    "settings.agentSection": "OpenCode (local agent)",
+    "settings.agentHint": "The agent runs OpenCode inside a project directory. It can read, edit and execute commands with the permissions configured in OpenCode.",
+    "settings.opencodeBinary": "OpenCode binary",
+    "settings.opencodeBinaryHint": "A name found in PATH, or an absolute path to the executable.",
+    "settings.opencodeWorkspace": "Agent workspace",
+    "settings.opencodeModel": "OpenCode model",
+    "settings.opencodeAgent": "Agent",
+    "settings.opencodeRefresh": "Refresh OpenCode models",
+    "settings.opencodeAuto": "Auto-approve OpenCode permissions (read, write, commands)",
+    "settings.opencodeWarning": "Auto-approval gives the agent the same rights as your user account. Disable it if you want to approve each action in OpenCode.",
+    "settings.providerImported": "OpenCode providers imported",
+    "settings.providerRemoved": "Provider removed",
+    "settings.providerDetected": "Detected from {path}",
+    "settings.providerNewName": "New provider",
+    "settings.providerKeepOne": "Keep at least one provider",
+    "settings.providerImportEmpty": "No OpenCode provider to import",
     "settings.toolsSection": "Tools & files",
     "settings.localBadge": "local",
-    "settings.toolsEnabled": "Allow Lumo to use tools",
+    "settings.toolsEnabled": "Allow the model to use tools",
     "settings.allowRead": "Read files and directories",
     "settings.allowWrite": "Write or edit files",
     "settings.allowShell": "Run shell commands",
@@ -643,8 +1009,8 @@ const I18N = {
     "settings.toolsWarning": "Shell commands run with your user account and can access anything that account can. Only enable this if you trust the model.",
     "settings.test": "Test connection",
     "settings.testing": "Testing…",
-    "settings.testOk": "✓ Connected · Proton auth valid\n{models}",
-    "settings.testAuthBad": "lumo-tamer responds, but the Proton session is invalid. Re-authenticate the container.",
+    "settings.testOk": "✓ Connected\n{models}",
+    "settings.testAuthBad": "The provider responds, but authentication failed.",
     "settings.cancel": "Cancel",
     "settings.save": "Save",
     "settings.dataDir": "Local data:",
@@ -655,6 +1021,7 @@ const I18N = {
     "settings.tab.memory": "Memory",
     "settings.tab.general": "General",
     "settings.tab.tools": "Tools",
+    "settings.tab.agent": "Agent",
 
     "pages.allChats": "All chats",
     "pages.allChatsSub": "All your conversations, grouped by project.",
@@ -1011,10 +1378,23 @@ function bindUi() {
       conversation.updatedAt = Date.now();
     }
     app.settings.model = event.target.value;
+    if (conversation?.mode === "agent") {
+      app.settings.opencodeModel = event.target.value;
+    }
     persistSettings();
     refreshModelSelect();
     updateComposerState();
     renderSidebar();
+    updateAgentBanner();
+  });
+
+  $("provider-select").addEventListener("change", (event) =>
+    onProviderChange(event.target.value)
+  );
+  $("nav-agent").addEventListener("click", newAgentChat);
+  $("agent-settings-btn").addEventListener("click", () => {
+    openSettings();
+    selectSettingsTab("agent");
   });
 
   $("thinking-toggle").addEventListener("change", (event) => {
@@ -1052,8 +1432,58 @@ function bindUi() {
   document.addEventListener("click", onGlobalClick);
 
   $("settings-form").addEventListener("submit", saveSettingsFromForm);
+  $("settings-dialog").addEventListener("close", () => {
+    if (settingsSaved) {
+      settingsSaved = false;
+      settingsSnapshot = null;
+      return;
+    }
+    if (!settingsSnapshot) return;
+    app.settings.providers = settingsSnapshot.providers;
+    app.settings.activeProvider = settingsSnapshot.activeProvider;
+    app.settings.baseUrl = settingsSnapshot.baseUrl;
+    app.settings.apiKey = settingsSnapshot.apiKey;
+    app.settings.model = settingsSnapshot.model;
+    app.providers = app.settings.providers;
+    app.activeProvider = app.settings.activeProvider;
+    settingsSnapshot = null;
+    syncLegacyFromActive();
+    refreshProviderSelect();
+    refreshModelSelect();
+    updateWelcome();
+    updateComposerState();
+  });
   $("test-connection").addEventListener("click", testConnection);
   $("setting-tools-enabled").addEventListener("change", updateToolPermissionsState);
+  $("setting-provider-select").addEventListener("change", onSettingsProviderChange);
+  $("add-provider").addEventListener("click", addProviderFromSettings);
+  $("remove-provider").addEventListener("click", removeProviderFromSettings);
+  $("import-opencode-providers").addEventListener(
+    "click",
+    importOpenCodeProviders
+  );
+  $("refresh-opencode-models").addEventListener("click", async () => {
+    await refreshOpenCodeModels();
+    refreshAgentModelOptions();
+    updateAgentBanner();
+    showToast(
+      app.agentModels.length
+        ? t("settings.opencodeRefresh")
+        : t("agent.statusMissing"),
+      !app.agentModels.length
+    );
+  });
+  $("setting-opencode-model").addEventListener("change", (event) => {
+    app.settings.opencodeModel = event.target.value;
+    const conversation = activeConversation();
+    if (conversation?.mode === "agent") {
+      conversation.model = event.target.value;
+      conversation.updatedAt = Date.now();
+      refreshModelSelect();
+      updateAgentBanner();
+      persistConversations();
+    }
+  });
   $("toggle-key").addEventListener("click", () => {
     const field = $("setting-api-key");
     const isPassword = field.type === "password";
@@ -1227,6 +1657,14 @@ function normalizeConversation(raw) {
     updatedAt: numberOr(conversation.updatedAt, Date.now()),
     model: conversation.model || app.settings?.model || "lumo",
     thinking: Boolean(conversation.thinking),
+    mode: conversation.mode === "agent" ? "agent" : "chat",
+    providerId: conversation.providerId || app.settings?.activeProvider || "",
+    agentSessionId: conversation.agentSessionId || "",
+    agentWorkspace:
+      conversation.agentWorkspace ||
+      app.settings?.opencodeWorkspace ||
+      app.settings?.workspace ||
+      "",
     projectId: conversation.projectId || null,
     favorite: Boolean(conversation.favorite),
     messages: Array.isArray(conversation.messages)
@@ -1312,14 +1750,23 @@ function activeConversation() {
   return app.conversations.find((conversation) => conversation.id === app.activeId) || null;
 }
 
-function createConversation() {
+function createConversation(mode = "chat") {
+  const provider = activeProvider();
   const conversation = {
     id: uid("conv"),
-    title: t("title.newConversation"),
+    title: mode === "agent" ? t("agent.newChat") : t("title.newConversation"),
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    model: validModel(app.settings.model),
-    thinking: Boolean(app.settings.thinking),
+    model:
+      mode === "agent"
+        ? validModel(agentDefaultModel(), "agent")
+        : validModel(provider?.model || app.settings.model),
+    thinking: mode === "agent" ? false : Boolean(app.settings.thinking),
+    mode,
+    providerId: provider?.id || "",
+    agentSessionId: "",
+    agentWorkspace:
+      app.settings.opencodeWorkspace || app.settings.workspace || "",
     projectId: app.allChatsFilter === "project" ? app.activeProjectId : null,
     favorite: false,
     messages: [],
@@ -1329,10 +1776,21 @@ function createConversation() {
   return conversation;
 }
 
-function validModel(model) {
-  const available = app.models.length
-    ? app.models.map((entry) => entry.id)
-    : DEFAULT_MODELS;
+function agentDefaultModel() {
+  if (app.settings?.opencodeModel) return app.settings.opencodeModel;
+  if (app.agentModels.length) return app.agentModels[0].id;
+  return "deepseek/deepseek-flash";
+}
+
+function validModel(model, mode = "chat") {
+  const available =
+    mode === "agent"
+      ? app.agentModels.length
+        ? app.agentModels.map((entry) => entry.id)
+        : [agentDefaultModel()]
+      : app.models.length
+        ? app.models.map((entry) => entry.id)
+        : DEFAULT_MODELS;
   return available.includes(model) ? model : available[0] || "lumo";
 }
 
@@ -1583,6 +2041,7 @@ function showPage(view) {
 
   if (view === "chat") {
     main.classList.remove("page-mode");
+    updateAgentBanner();
   } else {
     main.classList.add("page-mode");
   }
@@ -1882,12 +2341,13 @@ function renderSidebar() {
     const projectLabel = project
       ? ` · ${project.icon || "📁"} ${project.name}`
       : "";
+    const agent = conversation.mode === "agent";
     html += `
       <div class="conv-item${active}" data-id="${escapeHtml(conversation.id)}" role="button" tabindex="0" title="${escapeHtml(conversation.title)}">
-        <span class="conv-icon">${icon("chat")}</span>
+        <span class="conv-icon">${icon(agent ? "terminal" : "chat")}</span>
         <span class="conv-main">
           <span class="conv-title">${favorite}${escapeHtml(conversation.title)}</span>
-          <span class="conv-meta">${escapeHtml(prettyModel(conversation.model))} · ${escapeHtml(relativeTime(conversation.updatedAt))}${escapeHtml(projectLabel)}</span>
+          <span class="conv-meta">${agent ? "Agent · " : ""}${escapeHtml(prettyModel(conversation.model))} · ${escapeHtml(relativeTime(conversation.updatedAt))}${escapeHtml(projectLabel)}</span>
         </span>
         <span class="conv-actions">
           <button type="button" class="conv-action" data-action="favorite" data-id="${escapeHtml(conversation.id)}" title="${escapeHtml(t("sidebar.favorites"))}" aria-label="${escapeHtml(t("sidebar.favorites"))}">${icon("star")}</button>
@@ -1927,7 +2387,23 @@ async function selectConversation(id) {
   app.search = "";
   $("search").value = "";
   $("app").classList.remove("sidebar-open");
+
+  if (conversation.mode !== "agent") {
+    const provider = providerById(conversation.providerId);
+    if (provider && provider.id !== app.settings.activeProvider) {
+      app.settings.activeProvider = provider.id;
+      app.activeProvider = provider.id;
+      syncLegacyFromActive();
+      persistSettings();
+      refreshModels();
+    }
+  } else if (!app.agentModels.length) {
+    refreshOpenCodeModels();
+  }
+
+  refreshProviderSelect();
   refreshModelSelect();
+  updateAgentBanner();
   renderSidebar();
   renderMessages({ scrollToEnd: true });
   updateComposerState();
@@ -1941,10 +2417,36 @@ async function newChat() {
   $("search").value = "";
   $("app").classList.remove("sidebar-open");
   showPage("chat");
+  refreshProviderSelect();
   refreshModelSelect();
+  updateAgentBanner();
   renderSidebar();
   renderMessages({ scrollToEnd: false });
   updateComposerState();
+  $("input").focus();
+}
+
+async function newAgentChat() {
+  if (app.streaming) await stopGeneration();
+  if (!app.agentModels.length) await refreshOpenCodeModels();
+
+  const conversation = createConversation("agent");
+  conversation.title = t("agent.newChat");
+  conversation.model = validModel(conversation.model, "agent");
+  conversation.agentWorkspace =
+    app.settings.opencodeWorkspace || app.settings.workspace || "";
+
+  app.search = "";
+  $("search").value = "";
+  $("app").classList.remove("sidebar-open");
+  showPage("chat");
+  refreshProviderSelect();
+  refreshModelSelect();
+  updateAgentBanner();
+  renderSidebar();
+  renderMessages({ scrollToEnd: false });
+  updateComposerState();
+  persistConversations();
   $("input").focus();
 }
 
@@ -2088,7 +2590,7 @@ function buildMessageElement(message, conversation) {
   const head = document.createElement("div");
   head.className = "message-head";
   head.innerHTML = `
-    <span class="author">Lumo</span>
+    <span class="author">${conversation.mode === "agent" ? "OpenCode" : "Lumo"}</span>
     ${
       message.model
         ? `<span class="model-chip">${escapeHtml(prettyModel(message.model))}</span>`
@@ -2106,7 +2608,11 @@ function buildMessageElement(message, conversation) {
   );
   const isLastMessage =
     conversation.messages[conversation.messages.length - 1]?.id === message.id;
-  if (isLastMessage && (!app.streaming || app.activeAssistantId !== message.id)) {
+  if (
+    conversation.mode !== "agent" &&
+    isLastMessage &&
+    (!app.streaming || app.activeAssistantId !== message.id)
+  ) {
     tools.appendChild(
       messageTool(
         "refresh",
@@ -2941,7 +3447,7 @@ async function sendMessage() {
     );
   }
   conversation.updatedAt = Date.now();
-  conversation.model = validModel(conversation.model);
+  conversation.model = validModel(conversation.model, conversation.mode);
   persistConversations();
 
   app.pendingAttachments = [];
@@ -3001,6 +3507,47 @@ async function startGeneration(conversation) {
   renderMessages({ scrollToEnd: true });
   updateComposerState();
 
+  if (conversation.mode === "agent") {
+    const lastUser = [...conversation.messages]
+      .reverse()
+      .find((message) => message.role === "user");
+    const prompt = lastUser ? messageContentForApi(lastUser) : "";
+    const workspace =
+      conversation.agentWorkspace ||
+      app.settings.opencodeWorkspace ||
+      app.settings.workspace ||
+      "";
+
+    if (!workspace.trim()) {
+      assistant.error = t("agent.notConfigured");
+      finalizeGeneration({});
+      return;
+    }
+
+    const request = {
+      requestId: app.activeRequestId,
+      prompt,
+      workspace,
+      model: conversation.model || agentDefaultModel(),
+      agent: app.settings.opencodeAgent || "build",
+      sessionId: conversation.agentSessionId || "",
+      autoApprove: app.settings.opencodeAuto !== false,
+      binary: app.settings.opencodeBinary || "opencode",
+      language: app.language,
+    };
+
+    try {
+      await invoke("start_agent", { request });
+    } catch (error) {
+      assistant.error = String(error);
+      finalizeGeneration({});
+    }
+    return;
+  }
+
+  const provider = activeProvider();
+  conversation.providerId = provider?.id || conversation.providerId || "";
+
   const history = conversation.messages
     .slice(0, -1)
     .filter((message) => message.role === "user" || message.role === "assistant")
@@ -3021,16 +3568,18 @@ async function startGeneration(conversation) {
       ) || null,
     thinking: Boolean(conversation.thinking),
     temperature: null,
-    baseUrl: app.settings.baseUrl,
-    apiKey: app.settings.apiKey,
+    baseUrl: provider?.baseUrl || app.settings.baseUrl,
+    apiKey: provider?.apiKey || app.settings.apiKey,
     language: app.language,
-    toolsEnabled: Boolean(app.settings.toolsEnabled),
+    toolsEnabled: Boolean(app.settings.toolsEnabled && provider?.supportsTools),
     allowRead: Boolean(app.settings.allowRead),
     allowWrite: Boolean(app.settings.allowWrite),
     allowShell: Boolean(app.settings.allowShell),
     confirmWrites: Boolean(app.settings.confirmWrites),
     confirmShell: Boolean(app.settings.confirmShell),
     workspace: app.settings.workspace || "",
+    providerKind: provider?.kind || "lumo",
+    providerName: provider?.name || "lumo-tamer",
   };
 
   try {
@@ -3097,6 +3646,87 @@ function onChatEvent(event) {
         cancelled: Boolean(data.cancelled),
         finishReason: data.finishReason || null,
         usage: data.usage || null,
+      });
+      break;
+  }
+}
+
+function onAgentEvent(event) {
+  const data = event.payload || {};
+  if (!app.activeRequestId || data.requestId !== app.activeRequestId) return;
+
+  const conversation = activeConversation();
+  const message = conversation?.messages.find(
+    (entry) => entry.id === app.activeAssistantId
+  );
+  if (!message) return;
+
+  switch (data.type) {
+    case "session":
+      if (data.sessionId) {
+        conversation.agentSessionId = data.sessionId;
+        persistConversations();
+      }
+      break;
+    case "delta":
+      message.content += data.content || "";
+      scheduleStreamUpdate();
+      break;
+    case "reasoning":
+      message.reasoning += data.content || "";
+      scheduleStreamUpdate();
+      break;
+    case "tool": {
+      const callId = data.callId || data.title || data.tool || uid("tool");
+      let tool = message.tools.find((entry) => entry.callId === callId);
+      if (!tool) {
+        tool = {
+          callId,
+          name: data.tool || "tool",
+          arguments: {},
+          summary: data.title || "",
+          status: "running",
+          output: "",
+          ok: null,
+        };
+        message.tools.push(tool);
+      }
+      tool.name = data.tool || tool.name;
+      tool.summary = data.title || tool.summary;
+      tool.status =
+        data.status === "completed" || data.status === "done"
+          ? "done"
+          : data.status === "error"
+            ? "error"
+            : "running";
+      const output = data.state?.output;
+      if (typeof output === "string") {
+        tool.output = output;
+      } else if (output && typeof output === "object") {
+        try {
+          tool.output = JSON.stringify(output, null, 2);
+        } catch {
+          tool.output = String(output);
+        }
+      }
+      scheduleStreamUpdate();
+      break;
+    }
+    case "usage":
+      message.usage = {
+        ...(data.usage || {}),
+        ...(data.cost != null ? { cost: data.cost } : {}),
+        ...(data.reason != null ? { finishReason: data.reason } : {}),
+      };
+      break;
+    case "error":
+      message.error = data.message || "OpenCode error";
+      scheduleStreamUpdate();
+      break;
+    case "done":
+      finalizeGeneration({
+        cancelled: Boolean(data.cancelled),
+        usage: message.usage || null,
       });
       break;
   }
@@ -3192,7 +3822,7 @@ function finalizeGeneration({ cancelled = false, finishReason = null, usage = nu
   renderSidebar();
   persistConversations(true);
 
-  if (conversation && !cancelled && !message?.error) {
+  if (conversation && conversation.mode !== "agent" && !cancelled && !message?.error) {
     maybeAutoExtractMemories(conversation);
   }
 }
@@ -3340,14 +3970,33 @@ function onGlobalClick(event) {
  * ----------------------------------------------------------------------- */
 
 async function refreshHealth({ quiet = false } = {}) {
+  const provider = activeProvider();
+  const providerLabel = provider?.name || "lumo-tamer";
+  const isLumo = !provider || provider.kind === "lumo";
+
   try {
     const health = await invoke("check_health", { settings: app.settings });
     app.health = health;
     const auth = health?.auth || {};
     if (health?.status === "ok" && auth.valid) {
-      setHealth("ok", t("health.connected"));
+      setHealth(
+        "ok",
+        isLumo
+          ? t("health.connected")
+          : t("health.providerConnected", { provider: providerLabel })
+      );
       $("offline-banner").classList.add("hidden");
       return true;
+    }
+
+    if (!isLumo) {
+      setHealth(
+        "warn",
+        t("health.providerOffline", { provider: providerLabel })
+      );
+      $("offline-banner").classList.add("hidden");
+      if (!quiet) showToast(t("health.providerOffline", { provider: providerLabel }), true);
+      return false;
     }
 
     setHealth("warn", t("health.authExpired"));
@@ -3360,6 +4009,16 @@ async function refreshHealth({ quiet = false } = {}) {
     return false;
   } catch (error) {
     app.health = null;
+    if (!isLumo) {
+      setHealth(
+        "down",
+        t("health.providerOffline", { provider: providerLabel })
+      );
+      $("offline-banner").classList.add("hidden");
+      if (!quiet) showToast(compactError(error), true);
+      return false;
+    }
+
     setHealth("down", t("health.offline"));
     showOfflineBanner({
       mode: "start",
@@ -3380,9 +4039,10 @@ async function refreshHealth({ quiet = false } = {}) {
 }
 
 function setHealth(state, label) {
+  const provider = activeProvider();
   $("health-dot").className = `dot ${state}`;
   $("health-label").textContent = label;
-  $("health-pill").title = `lumo-tamer · ${label}`;
+  $("health-pill").title = `${provider?.name || "lumo-tamer"} · ${label}`;
 }
 
 function showOfflineBanner({ mode, title, detail }) {
@@ -3733,23 +4393,41 @@ function showInstallError(message) {
 }
 
 async function refreshModels() {
+  const provider = activeProvider();
   try {
     app.models = await invoke("list_models", { settings: app.settings });
   } catch (error) {
-    app.models = DEFAULT_MODELS.map((id) => ({ id, name: id }));
+    app.models = (provider?.models || []).map((id) => ({ id, name: id }));
+    if (!app.models.length) {
+      app.models = DEFAULT_MODELS.map((id) => ({ id, name: id }));
+    }
+    console.warn("list_models", error);
   }
+
+  if (provider && app.models.length) {
+    provider.models = app.models.map((model) => model.id);
+    if (!provider.model || !provider.models.includes(provider.model)) {
+      provider.model = provider.models[0];
+    }
+  }
+  refreshProviderSelect();
   refreshModelSelect();
 }
 
 function refreshModelSelect() {
   const select = $("model-select");
   const conversation = activeConversation();
-  const current = validModel(
-    conversation?.model || app.settings?.model || "lumo"
-  );
-  const ids = app.models.length
-    ? app.models.map((model) => model.id)
-    : DEFAULT_MODELS.slice();
+  const mode = conversation?.mode === "agent" ? "agent" : "chat";
+  const source = mode === "agent" ? app.agentModels : app.models;
+  const fallback =
+    mode === "agent" ? [agentDefaultModel()] : DEFAULT_MODELS.slice();
+  const requested =
+    conversation?.model ||
+    (mode === "agent"
+      ? agentDefaultModel()
+      : activeProvider()?.model || app.settings?.model || "lumo");
+  const current = validModel(requested, mode);
+  const ids = source.length ? source.map((model) => model.id) : fallback;
 
   select.innerHTML = "";
   for (const id of ids) {
@@ -3766,14 +4444,26 @@ function refreshModelSelect() {
   }
   select.value = current;
 
-  $("thinking-toggle").checked = Boolean(
-    conversation ? conversation.thinking : app.settings.thinking
-  );
+  $("thinking-toggle").checked =
+    mode === "agent"
+      ? false
+      : Boolean(conversation ? conversation.thinking : app.settings.thinking);
+  $("thinking-toggle")
+    .closest(".think-toggle")
+    ?.classList.toggle(
+      "hidden",
+      mode === "agent" || activeProvider()?.kind !== "lumo"
+    );
+  updateWelcome();
   updateComposerState();
 }
 
 function modelName(id) {
-  return app.models.find((model) => model.id === id)?.name || id;
+  return (
+    app.models.find((model) => model.id === id)?.name ||
+    app.agentModels.find((model) => model.id === id)?.name ||
+    id
+  );
 }
 
 function prettyModel(id) {
@@ -3784,10 +4474,161 @@ function prettyModel(id) {
  * Settings
  * ----------------------------------------------------------------------- */
 
+function renderSettingsProviderFields() {
+  const provider = providerById(settingsProviderId) || activeProvider();
+  if (!provider) return;
+  settingsProviderId = provider.id;
+  $("setting-provider-select").value = provider.id;
+  $("setting-provider-name").value = provider.name || "";
+  $("setting-provider-kind").value = provider.kind || "openai";
+  $("setting-provider-model").value = provider.model || "";
+  $("setting-provider-thinking").checked = Boolean(provider.supportsThinking);
+  $("setting-provider-tools").checked = provider.supportsTools !== false;
+  $("setting-base-url").value = provider.baseUrl || "";
+  $("setting-api-key").value = provider.apiKey || "";
+  $("setting-api-key").type = "password";
+  $("provider-kind-badge").textContent = providerKindLabel(provider.kind);
+  $("provider-detected-hint").textContent = app.settings.detectedFrom
+    ? t("settings.providerDetected", { path: app.settings.detectedFrom })
+    : "";
+  updateKeyToggleLabel();
+}
+
+function saveCurrentProviderFields() {
+  const provider = providerById(settingsProviderId);
+  if (!provider) return;
+  provider.name = $("setting-provider-name").value.trim() || provider.name;
+  provider.kind = $("setting-provider-kind").value;
+  provider.model = $("setting-provider-model").value.trim();
+  provider.baseUrl = normalizeBaseUrl($("setting-base-url").value);
+  provider.apiKey = $("setting-api-key").value.trim();
+  provider.supportsThinking = $("setting-provider-thinking").checked;
+  provider.supportsTools = $("setting-provider-tools").checked;
+}
+
+function onSettingsProviderChange(event) {
+  saveCurrentProviderFields();
+  settingsProviderId = event.target.value;
+  renderSettingsProviderFields();
+}
+
+function addProviderFromSettings() {
+  saveCurrentProviderFields();
+  const id = `provider-${Date.now()}`;
+  app.providers.push({
+    id,
+    name: t("settings.providerNewName"),
+    kind: "openai",
+    baseUrl: "",
+    apiKey: "",
+    model: "",
+    models: [],
+    supportsThinking: false,
+    supportsTools: true,
+  });
+  app.settings.providers = app.providers;
+  settingsProviderId = id;
+  $("setting-provider-select").innerHTML = "";
+  for (const provider of app.providers) {
+    const option = document.createElement("option");
+    option.value = provider.id;
+    option.textContent = provider.name || provider.id;
+    $("setting-provider-select").appendChild(option);
+  }
+  renderSettingsProviderFields();
+  $("setting-provider-name").focus();
+  $("setting-provider-name").select();
+}
+
+function removeProviderFromSettings() {
+  if (app.providers.length <= 1) {
+    showToast(t("settings.providerKeepOne"), true);
+    return;
+  }
+  const index = app.providers.findIndex(
+    (provider) => provider.id === settingsProviderId
+  );
+  if (index < 0) return;
+  app.providers.splice(index, 1);
+  app.settings.providers = app.providers;
+  const next = app.providers[Math.max(0, index - 1)];
+  settingsProviderId = next.id;
+  $("setting-provider-select").innerHTML = "";
+  for (const provider of app.providers) {
+    const option = document.createElement("option");
+    option.value = provider.id;
+    option.textContent = provider.name || provider.id;
+    $("setting-provider-select").appendChild(option);
+  }
+  renderSettingsProviderFields();
+  showToast(t("settings.providerRemoved"));
+}
+
+async function importOpenCodeProviders() {
+  try {
+    const imported = await invoke("detect_opencode_providers");
+    if (!Array.isArray(imported) || !imported.length) {
+      showToast(t("settings.providerImportEmpty"), true);
+      return;
+    }
+    for (const candidate of imported) {
+      const existing = app.providers.find(
+        (provider) =>
+          provider.id === candidate.id || provider.kind === candidate.kind
+      );
+      if (existing) {
+        if (!existing.apiKey && candidate.apiKey) existing.apiKey = candidate.apiKey;
+        if (!existing.baseUrl && candidate.baseUrl) existing.baseUrl = candidate.baseUrl;
+        if (!existing.model && candidate.model) existing.model = candidate.model;
+        if (!existing.models?.length && candidate.models?.length) {
+          existing.models = candidate.models;
+        }
+      } else {
+        app.providers.push({
+          ...candidate,
+          supportsThinking: Boolean(candidate.supportsThinking),
+          supportsTools: candidate.supportsTools !== false,
+          models: Array.isArray(candidate.models) ? candidate.models : [],
+        });
+      }
+    }
+    app.settings.providers = app.providers;
+    $("setting-provider-select").innerHTML = "";
+    for (const provider of app.providers) {
+      const option = document.createElement("option");
+      option.value = provider.id;
+      option.textContent = provider.name || provider.id;
+      $("setting-provider-select").appendChild(option);
+    }
+    renderSettingsProviderFields();
+    showToast(t("settings.providerImported"));
+  } catch (error) {
+    showToast(compactError(error), true);
+  }
+}
+
 function openSettings() {
   const settings = app.settings;
-  $("setting-base-url").value = settings.baseUrl || "";
-  $("setting-api-key").value = settings.apiKey || "";
+  ensureProviders();
+  settingsSnapshot = JSON.parse(
+    JSON.stringify({
+      providers: app.settings.providers,
+      activeProvider: app.settings.activeProvider,
+      baseUrl: app.settings.baseUrl,
+      apiKey: app.settings.apiKey,
+      model: app.settings.model,
+    })
+  );
+  settingsSaved = false;
+  settingsProviderId = settings.activeProvider || app.providers[0]?.id || "";
+  $("setting-provider-select").innerHTML = "";
+  for (const provider of app.providers) {
+    const option = document.createElement("option");
+    option.value = provider.id;
+    option.textContent = provider.name || provider.id;
+    $("setting-provider-select").appendChild(option);
+  }
+  renderSettingsProviderFields();
   $("setting-api-key").type = "password";
   updateKeyToggleLabel();
   $("setting-system-prompt").value = settings.systemPrompt || "";
@@ -3812,6 +4653,13 @@ function openSettings() {
   $("setting-visualizations").checked = Boolean(settings.visualizationsEnabled);
   $("setting-past-chats").value = settings.pastChatsAccess || "all";
   $("setting-project-files").value = settings.projectFilesAccess || "current";
+  $("setting-opencode-binary").value = settings.opencodeBinary || "opencode";
+  $("setting-opencode-workspace").value =
+    settings.opencodeWorkspace || settings.workspace || "";
+  $("setting-opencode-agent").value = settings.opencodeAgent || "build";
+  $("setting-opencode-auto").checked = settings.opencodeAuto !== false;
+  refreshAgentModelOptions();
+  refreshOpenCodeStatus();
   updateToolPermissionsState();
   renderMemories();
   selectSettingsTab("connection");
@@ -3828,6 +4676,15 @@ function selectSettingsTab(name) {
   document.querySelectorAll("[data-settings-pane]").forEach((pane) => {
     pane.classList.toggle("hidden", pane.dataset.settingsPane !== name);
   });
+  if (name === "agent") {
+    refreshOpenCodeStatus();
+    if (!app.agentModels.length) {
+      refreshOpenCodeModels().then(() => {
+        refreshAgentModelOptions();
+        updateAgentBanner();
+      });
+    }
+  }
 }
 
 function renderMemories() {
@@ -3990,7 +4847,7 @@ async function toggleWebSearch() {
 }
 
 function updateAccountRow() {
-  const name = (app.settings?.profileName || "").trim() || "Proton Lumo";
+  const name = (app.settings?.profileName || "").trim() || t("account.defaultName");
   $("account-name").textContent = name;
   $("account-avatar").textContent = (name[0] || "L").toUpperCase();
 }
@@ -4107,10 +4964,16 @@ async function testConnection() {
 }
 
 function settingsFromForm() {
+  saveCurrentProviderFields();
+  const selected = providerById(settingsProviderId) || activeProvider();
   return {
     ...app.settings,
-    baseUrl: normalizeBaseUrl($("setting-base-url").value),
-    apiKey: $("setting-api-key").value.trim(),
+    providers: app.providers,
+    activeProvider: selected?.id || app.settings.activeProvider,
+    baseUrl:
+      selected?.baseUrl || normalizeBaseUrl($("setting-base-url").value),
+    apiKey: selected?.apiKey || $("setting-api-key").value.trim(),
+    model: selected?.model || $("setting-provider-model").value.trim(),
     systemPrompt: $("setting-system-prompt").value,
     theme: $("setting-theme").value,
     language: $("setting-language").value,
@@ -4133,6 +4996,14 @@ function settingsFromForm() {
     visualizationsEnabled: $("setting-visualizations").checked,
     pastChatsAccess: $("setting-past-chats").value,
     projectFilesAccess: $("setting-project-files").value,
+    opencodeBinary: $("setting-opencode-binary").value.trim() || "opencode",
+    opencodeWorkspace:
+      $("setting-opencode-workspace").value.trim() ||
+      $("setting-workspace").value.trim(),
+    opencodeModel:
+      $("setting-opencode-model").value || app.settings.opencodeModel,
+    opencodeAgent: $("setting-opencode-agent").value || "build",
+    opencodeAuto: $("setting-opencode-auto").checked,
   };
 }
 
@@ -4145,10 +5016,16 @@ async function saveSettingsFromForm(event) {
   }
 
   app.settings = next;
+  app.providers = next.providers;
+  app.activeProvider = next.activeProvider;
   app.language = resolveLanguage(next.language);
   applyTheme();
   applyTranslations();
+  updateWelcome();
+  refreshProviderSelect();
   refreshModelSelect();
+  refreshAgentModelOptions();
+  updateAgentBanner();
   renderSidebar();
   renderProjectList();
   renderProjects();
@@ -4161,10 +5038,12 @@ async function saveSettingsFromForm(event) {
 
   try {
     await invoke("save_settings", { settings: app.settings });
+    settingsSaved = true;
     $("settings-dialog").close();
     showToast(t("settings.saved"));
     refreshModels();
     refreshHealth({ quiet: true });
+    refreshOpenCodeStatus();
   } catch (error) {
     showToast(compactError(error), true);
   }
@@ -4230,7 +5109,11 @@ async function exportConversation() {
 
   for (const message of conversation.messages) {
     const author =
-      message.role === "user" ? t("export.user") : t("export.assistant");
+      message.role === "user"
+        ? t("export.user")
+        : conversation.mode === "agent"
+          ? "OpenCode"
+          : t("export.assistant");
     lines.push(`## ${author}`, "", message.content, "");
     if (message.attachments?.length) {
       lines.push(`**${t("export.attachments")}:**`, "");
@@ -4321,10 +5204,17 @@ function updateComposerState() {
   $("thinking-toggle").disabled = app.streaming;
 
   const conversation = activeConversation();
+  const agentMode = conversation?.mode === "agent";
   const model = conversation?.model || app.settings?.model || "lumo";
-  const thinking = conversation?.thinking ?? app.settings?.thinking;
-  $("token-info").textContent = `${prettyModel(model)}${
-    thinking ? ` · ${t("composer.thinkingActive")}` : ""
+  const thinking =
+    !agentMode &&
+    activeProvider()?.kind === "lumo" &&
+    (conversation?.thinking ?? app.settings?.thinking);
+  $("provider-select").disabled = app.streaming || agentMode;
+  $("token-info").textContent = `${agentMode ? "Agent · " : ""}${prettyModel(
+    model
+  )}${
+    !agentMode && thinking ? ` · ${t("composer.thinkingActive")}` : ""
   }${
     attachmentCount
       ? ` · ${t("composer.attachmentsCount", { n: attachmentCount })}`
@@ -4521,5 +5411,9 @@ function orbSvg() {
 
 boot().catch((error) => {
   console.error(error);
-  showToast(`${t("error.unknown")}: ${error}`, true);
+  const panel = document.createElement("pre");
+  panel.style.cssText =
+    "position:fixed;inset:24px;z-index:99999;overflow:auto;padding:20px;background:#1b1b1f;color:#ffb4b4;font:12px/1.5 monospace;white-space:pre-wrap;border:1px solid #7f1d1d;border-radius:12px";
+  panel.textContent = `Lumo Desktop — erreur au démarrage\n\n${error?.stack || error}`;
+  document.body.appendChild(panel);
 });

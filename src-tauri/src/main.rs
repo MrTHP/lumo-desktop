@@ -3,6 +3,7 @@
 mod api;
 mod attachments;
 mod install;
+mod opencode;
 mod store;
 mod tools;
 mod tray;
@@ -78,12 +79,14 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             api::get_initial_state,
             api::get_dev_prompt,
+            api::get_dev_agent,
             api::get_dev_open,
             api::get_dev_attachment,
             api::save_settings,
             api::save_conversations,
             api::check_health,
             api::list_models,
+            api::detect_opencode_providers,
             api::extract_memories,
             api::start_chat,
             api::stop_chat,
@@ -96,6 +99,9 @@ fn main() {
             install::authenticate_tamer,
             install::get_web_search,
             install::set_web_search,
+            opencode::opencode_status,
+            opencode::list_opencode_models,
+            opencode::start_agent,
             attachments::process_attachment,
         ])
         .run(tauri::generate_context!())

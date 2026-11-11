@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -25,6 +26,71 @@ pub struct Memory {
     pub source: String,
     #[serde(default)]
     pub created_at: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Provider {
+    pub id: String,
+    pub name: String,
+    /// "lumo", "deepseek" or "openai".
+    pub kind: String,
+    pub base_url: String,
+    pub api_key: String,
+    pub model: String,
+    pub models: Vec<String>,
+    pub supports_thinking: bool,
+    pub supports_tools: bool,
+}
+
+impl Default for Provider {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            name: String::new(),
+            kind: "openai".into(),
+            base_url: String::new(),
+            api_key: String::new(),
+            model: String::new(),
+            models: Vec::new(),
+            supports_thinking: false,
+            supports_tools: true,
+        }
+    }
+}
+
+pub const LUMO_BASE_URL: &str = "http://127.0.0.1:3003/v1";
+pub const DEEPSEEK_BASE_URL: &str = "https://api.deepseek.com/v1";
+pub const DEEPSEEK_MODELS: [&str; 2] = ["deepseek-flash", "deepseek-v4-pro"];
+
+impl Provider {
+    pub fn lumo(base_url: impl Into<String>, api_key: impl Into<String>) -> Self {
+        Self {
+            id: "lumo".into(),
+            name: "Lumo (Proton local)".into(),
+            kind: "lumo".into(),
+            base_url: normalize_base_url(&base_url.into()),
+            api_key: api_key.into(),
+            model: "lumo".into(),
+            models: vec!["lumo".into(), "lumo-lite".into(), "lumo-max".into()],
+            supports_thinking: true,
+            supports_tools: true,
+        }
+    }
+
+    pub fn deepseek(api_key: impl Into<String>) -> Self {
+        Self {
+            id: "deepseek".into(),
+            name: "DeepSeek".into(),
+            kind: "deepseek".into(),
+            base_url: DEEPSEEK_BASE_URL.into(),
+            api_key: api_key.into(),
+            model: "deepseek-flash".into(),
+            models: DEEPSEEK_MODELS.iter().map(|id| (*id).to_string()).collect(),
+            supports_thinking: true,
+            supports_tools: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -59,13 +125,65 @@ pub struct Settings {
     pub project_files_access: String,
     pub creations_enabled: bool,
     pub visualizations_enabled: bool,
+    pub providers: Vec<Provider>,
+    pub active_provider: String,
+    pub opencode_binary: String,
+    pub opencode_workspace: String,
+    pub opencode_model: String,
+    pub opencode_agent: String,
+    pub opencode_auto: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
+        let home = dirs::home_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        let detected = opencode_config_path()
+            .and_then(|path| read_opencode_provider(&path).map(|pair| (path, pair)));
+        let (detected_from, mut lumo_base, mut lumo_key) = match detected {
+            Some((path, (base_url, api_key))) => {
+                (Some(path.to_string_lossy().to_string()), base_url, api_key)
+            }
+            None => (None, LUMO_BASE_URL.to_string(), String::new()),
+        };
+
+        if let Ok(url) = std::env::var("LUMO_TAMER_URL") {
+            if !url.trim().is_empty() {
+                lumo_base = url;
+            }
+        }
+        if let Ok(key) = std::env::var("LUMO_TAMER_API_KEY") {
+            if !key.trim().is_empty() {
+                lumo_key = key;
+            }
+        }
+
+        let deepseek_key = std::env::var("DEEPSEEK_API_KEY")
+            .ok()
+            .filter(|key| !key.trim().is_empty())
+            .or_else(|| read_opencode_auth_key("deepseek"))
+            .unwrap_or_default();
+
+        let mut providers = vec![
+            Provider::lumo(lumo_base.clone(), lumo_key.clone()),
+            Provider::deepseek(deepseek_key.clone()),
+        ];
+        for provider in import_opencode_providers() {
+            merge_provider(&mut providers, provider);
+        }
+
+        let opencode_model = if deepseek_key.trim().is_empty() {
+            "lumo-tamer/lumo".to_string()
+        } else {
+            "deepseek/deepseek-flash".to_string()
+        };
+
         let mut settings = Settings {
-            base_url: "http://127.0.0.1:3003/v1".into(),
-            api_key: String::new(),
+            base_url: lumo_base,
+            api_key: lumo_key,
             model: "lumo".into(),
             thinking: false,
             system_prompt: String::new(),
@@ -73,17 +191,14 @@ impl Default for Settings {
             language: "auto".into(),
             tamer_dir: default_tamer_dir().to_string_lossy().to_string(),
             tamer_repo: "https://github.com/ZeroTricks/lumo-tamer.git".into(),
-            detected_from: None,
+            detected_from,
             tools_enabled: false,
             allow_read: true,
             allow_write: true,
             allow_shell: false,
             confirm_writes: true,
             confirm_shell: true,
-            workspace: dirs::home_dir()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
+            workspace: home.clone(),
             profile_name: String::new(),
             profile_occupation: String::new(),
             profile_context: String::new(),
@@ -96,29 +211,190 @@ impl Default for Settings {
             project_files_access: "current".into(),
             creations_enabled: true,
             visualizations_enabled: true,
+            providers,
+            active_provider: "lumo".into(),
+            opencode_binary: "opencode".into(),
+            opencode_workspace: home,
+            opencode_model,
+            opencode_agent: "build".into(),
+            opencode_auto: true,
         };
 
-        if let Some(path) = opencode_config_path() {
-            if let Some((base_url, api_key)) = read_opencode_provider(&path) {
-                settings.base_url = base_url;
-                settings.api_key = api_key;
-                settings.detected_from = Some(path.to_string_lossy().to_string());
-            }
-        }
-
-        if let Ok(url) = std::env::var("LUMO_TAMER_URL") {
-            if !url.trim().is_empty() {
-                settings.base_url = url;
-            }
-        }
-        if let Ok(key) = std::env::var("LUMO_TAMER_API_KEY") {
-            if !key.trim().is_empty() {
-                settings.api_key = key;
-            }
-        }
-
-        settings.base_url = normalize_base_url(&settings.base_url);
+        settings.normalize_providers();
+        settings.sync_legacy_from_active();
         settings
+    }
+}
+
+impl Settings {
+    pub fn provider(&self) -> Option<&Provider> {
+        self.providers
+            .iter()
+            .find(|provider| provider.id == self.active_provider)
+            .or_else(|| self.providers.first())
+    }
+
+    pub fn sync_legacy_from_active(&mut self) {
+        if let Some(provider) = self.provider().cloned() {
+            self.base_url = provider.base_url;
+            self.api_key = provider.api_key;
+            self.model = provider.model;
+        }
+    }
+
+    pub fn normalize_providers(&mut self) {
+        if self.providers.is_empty() {
+            let detected = opencode_config_path()
+                .and_then(|path| read_opencode_provider(&path).map(|pair| (path, pair)));
+            let (detected_from, lumo_base, lumo_key) = match detected {
+                Some((path, (base_url, api_key))) => {
+                    (Some(path.to_string_lossy().to_string()), base_url, api_key)
+                }
+                None => (None, LUMO_BASE_URL.to_string(), String::new()),
+            };
+            if self.detected_from.is_none() {
+                self.detected_from = detected_from;
+            }
+            let base = if self.base_url.trim().is_empty() {
+                lumo_base
+            } else {
+                self.base_url.clone()
+            };
+            let key = if self.api_key.trim().is_empty() {
+                lumo_key
+            } else {
+                self.api_key.clone()
+            };
+            self.providers.push(Provider::lumo(base, key));
+            let deepseek_key = std::env::var("DEEPSEEK_API_KEY")
+                .ok()
+                .filter(|value| !value.trim().is_empty())
+                .or_else(|| read_opencode_auth_key("deepseek"))
+                .unwrap_or_default();
+            self.providers.push(Provider::deepseek(deepseek_key));
+        }
+
+        let mut seen = HashSet::new();
+        for provider in &mut self.providers {
+            if provider.id.trim().is_empty() {
+                provider.id = sanitize_id(if provider.name.trim().is_empty() {
+                    "provider"
+                } else {
+                    &provider.name
+                });
+            }
+            let base_id = provider.id.clone();
+            let mut suffix = 2;
+            while !seen.insert(provider.id.clone()) {
+                provider.id = format!("{base_id}-{suffix}");
+                suffix += 1;
+            }
+
+            if provider.name.trim().is_empty() {
+                provider.name = provider.id.clone();
+            }
+            provider.kind = provider.kind.trim().to_ascii_lowercase();
+            if provider.kind.is_empty() {
+                provider.kind = "openai".into();
+            }
+            if provider.base_url.trim().is_empty() {
+                provider.base_url = match provider.kind.as_str() {
+                    "lumo" => LUMO_BASE_URL.to_string(),
+                    "deepseek" => DEEPSEEK_BASE_URL.to_string(),
+                    _ => String::new(),
+                };
+            }
+            if !provider.base_url.trim().is_empty() {
+                provider.base_url = normalize_base_url(&provider.base_url);
+            }
+
+            match provider.kind.as_str() {
+                "lumo" => {
+                    provider.supports_thinking = true;
+                    provider.supports_tools = true;
+                    if provider.model.trim().is_empty() {
+                        provider.model = "lumo".into();
+                    }
+                    if provider.models.is_empty() {
+                        provider.models =
+                            vec!["lumo".into(), "lumo-lite".into(), "lumo-max".into()];
+                    }
+                }
+                "deepseek" => {
+                    provider.supports_thinking = true;
+                    provider.supports_tools = true;
+                    if provider.model.trim().is_empty() {
+                        provider.model = "deepseek-flash".into();
+                    }
+                    if provider.models.is_empty() {
+                        provider.models =
+                            DEEPSEEK_MODELS.iter().map(|id| (*id).to_string()).collect();
+                    }
+                }
+                _ => {}
+            }
+
+            if provider.models.is_empty() && !provider.model.trim().is_empty() {
+                provider.models = vec![provider.model.clone()];
+            }
+        }
+
+        if let Some(deepseek) = self
+            .providers
+            .iter_mut()
+            .find(|provider| provider.kind == "deepseek")
+        {
+            if deepseek.api_key.trim().is_empty() {
+                if let Some(key) = std::env::var("DEEPSEEK_API_KEY")
+                    .ok()
+                    .filter(|value| !value.trim().is_empty())
+                    .or_else(|| read_opencode_auth_key("deepseek"))
+                {
+                    deepseek.api_key = key;
+                }
+            }
+        }
+
+        if !self
+            .providers
+            .iter()
+            .any(|provider| provider.id == self.active_provider)
+        {
+            self.active_provider = self
+                .providers
+                .iter()
+                .find(|provider| provider.kind == "lumo")
+                .or_else(|| self.providers.first())
+                .map(|provider| provider.id.clone())
+                .unwrap_or_default();
+        }
+
+        if self.opencode_binary.trim().is_empty() {
+            self.opencode_binary = "opencode".into();
+        }
+        if self.opencode_agent.trim().is_empty() {
+            self.opencode_agent = "build".into();
+        }
+        if self.opencode_workspace.trim().is_empty() {
+            self.opencode_workspace = if self.workspace.trim().is_empty() {
+                dirs::home_dir()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string()
+            } else {
+                self.workspace.clone()
+            };
+        }
+        if self.opencode_model.trim().is_empty() {
+            self.opencode_model =
+                if self.providers.iter().any(|provider| {
+                    provider.kind == "deepseek" && !provider.api_key.trim().is_empty()
+                }) {
+                    "deepseek/deepseek-flash".into()
+                } else {
+                    "lumo-tamer/lumo".into()
+                };
+        }
     }
 }
 
@@ -151,26 +427,20 @@ impl Store {
             Err(_) => Settings::default(),
         };
 
-        // A settings file created before the OpenCode detection existed has an
-        // empty key. Try to fill it in on first load so the app works out of
-        // the box for lumo-tamer users.
-        if settings.api_key.trim().is_empty() {
-            if let Some((base_url, api_key)) = detect_from_opencode() {
-                if settings.base_url.trim().is_empty()
-                    || settings.base_url == "http://127.0.0.1:3003/v1"
-                {
-                    settings.base_url = base_url;
-                }
-                settings.api_key = api_key;
-            }
-        }
-
-        settings.base_url = normalize_base_url(&settings.base_url);
+        // Migrate settings written by older versions (one flat provider) and
+        // fill in keys discovered in OpenCode when the user has not set one.
+        settings.normalize_providers();
+        settings.sync_legacy_from_active();
         settings
     }
 
-    pub fn save_settings(&self, settings: &Settings) -> Result<(), String> {
-        write_private_json(&self.settings_path(), &serde_json::to_vec_pretty(settings).map_err(|e| e.to_string())?)
+    pub fn save_settings(&self, settings: &mut Settings) -> Result<(), String> {
+        settings.normalize_providers();
+        settings.sync_legacy_from_active();
+        write_private_json(
+            &self.settings_path(),
+            &serde_json::to_vec_pretty(settings).map_err(|e| e.to_string())?,
+        )
     }
 
     pub fn load_conversations(&self) -> Value {
@@ -261,16 +531,147 @@ fn opencode_config_path() -> Option<PathBuf> {
     None
 }
 
-fn detect_from_opencode() -> Option<(String, String)> {
-    let path = opencode_config_path()?;
-    read_opencode_provider(&path)
+fn opencode_auth_path() -> Option<PathBuf> {
+    dirs::data_local_dir().map(|dir| dir.join("opencode/auth.json"))
+}
+
+fn read_opencode_auth_key(provider_id: &str) -> Option<String> {
+    let raw = fs::read_to_string(opencode_auth_path()?).ok()?;
+    let value: Value = serde_json::from_str(&raw).ok()?;
+    let entry = value.get(provider_id)?;
+    let key = entry
+        .get("key")
+        .and_then(Value::as_str)
+        .or_else(|| entry.get("apiKey").and_then(Value::as_str))?;
+    if key.trim().is_empty() {
+        None
+    } else {
+        Some(key.to_string())
+    }
+}
+
+fn sanitize_id(raw: &str) -> String {
+    let mut out = String::new();
+    for character in raw.chars() {
+        if character.is_ascii_alphanumeric() {
+            out.push(character.to_ascii_lowercase());
+        } else if character == '-' || character == '_' {
+            out.push(character);
+        }
+    }
+    if out.is_empty() {
+        "provider".into()
+    } else {
+        out
+    }
+}
+
+fn merge_provider(providers: &mut Vec<Provider>, candidate: Provider) {
+    let existing = providers.iter_mut().find(|provider| {
+        provider.id == candidate.id
+            || (candidate.kind != "openai" && provider.kind == candidate.kind)
+    });
+
+    if let Some(existing) = existing {
+        if existing.name.trim().is_empty() {
+            existing.name = candidate.name;
+        }
+        if existing.base_url.trim().is_empty() {
+            existing.base_url = candidate.base_url;
+        }
+        if existing.api_key.trim().is_empty() {
+            existing.api_key = candidate.api_key;
+        }
+        if existing.model.trim().is_empty() {
+            existing.model = candidate.model;
+        }
+        for model in candidate.models {
+            if !existing.models.contains(&model) {
+                existing.models.push(model);
+            }
+        }
+        existing.supports_thinking |= candidate.supports_thinking;
+        existing.supports_tools |= candidate.supports_tools;
+    } else {
+        providers.push(candidate);
+    }
+}
+
+pub fn import_opencode_providers() -> Vec<Provider> {
+    let mut imported = Vec::new();
+    let providers = opencode_config_path()
+        .and_then(|path| fs::read_to_string(path).ok())
+        .and_then(|raw| serde_json::from_str::<Value>(&strip_jsonc(&raw)).ok())
+        .and_then(|config| {
+            config
+                .get("providers")
+                .or_else(|| config.get("provider"))
+                .cloned()
+        })
+        .and_then(|providers| providers.as_object().cloned());
+
+    if let Some(providers) = providers {
+        for (key, provider) in providers {
+            let settings = provider.get("settings");
+            let base_url = settings
+                .and_then(|value| value.get("baseURL").or_else(|| value.get("baseUrl")))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            if base_url.trim().is_empty() {
+                continue;
+            }
+
+            let api_key = settings
+                .and_then(|value| value.get("apiKey"))
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            let name = provider.get("name").and_then(Value::as_str).unwrap_or(&key);
+            let identity = format!("{} {}", key.to_ascii_lowercase(), name.to_ascii_lowercase());
+            let kind = if identity.contains("lumo") {
+                "lumo"
+            } else if identity.contains("deepseek") {
+                "deepseek"
+            } else {
+                "openai"
+            };
+            let models = provider
+                .get("models")
+                .and_then(Value::as_object)
+                .map(|models| models.keys().cloned().collect::<Vec<_>>())
+                .unwrap_or_default();
+            let model = models.first().cloned().unwrap_or_default();
+
+            imported.push(Provider {
+                id: sanitize_id(&key),
+                name: name.to_string(),
+                kind: kind.into(),
+                base_url: normalize_base_url(base_url),
+                api_key: api_key.to_string(),
+                model,
+                models,
+                supports_thinking: true,
+                supports_tools: true,
+            });
+        }
+    }
+
+    if !imported.iter().any(|provider| provider.kind == "deepseek") {
+        if let Some(key) = read_opencode_auth_key("deepseek") {
+            imported.push(Provider::deepseek(key));
+        }
+    }
+
+    imported
 }
 
 fn read_opencode_provider(path: &Path) -> Option<(String, String)> {
     let raw = fs::read_to_string(path).ok()?;
     let cleaned = strip_jsonc(&raw);
     let config: Value = serde_json::from_str(&cleaned).ok()?;
-    let providers = config.get("providers")?.as_object()?;
+    let providers = config
+        .get("providers")
+        .or_else(|| config.get("provider"))?
+        .as_object()?;
 
     let mut fallback = None;
     for (key, provider) in providers {
@@ -391,5 +792,36 @@ mod tests {
             origin_from_base_url("http://127.0.0.1:3003/v1"),
             "http://127.0.0.1:3003"
         );
+    }
+
+    #[test]
+    fn normalizes_deepseek_provider_and_active_fallback() {
+        let mut settings = Settings::default();
+        settings.providers = vec![Provider {
+            id: "deepseek".into(),
+            kind: "deepseek".into(),
+            ..Default::default()
+        }];
+        settings.active_provider = "missing".into();
+
+        settings.normalize_providers();
+
+        assert_eq!(settings.active_provider, "deepseek");
+        assert_eq!(settings.providers[0].base_url, DEEPSEEK_BASE_URL);
+        assert_eq!(settings.providers[0].model, "deepseek-flash");
+        assert_eq!(settings.providers[0].models.len(), 2);
+    }
+
+    #[test]
+    fn syncs_legacy_fields_from_active_provider() {
+        let mut settings = Settings::default();
+        settings.providers = vec![Provider::deepseek("secret")];
+        settings.active_provider = "deepseek".into();
+
+        settings.sync_legacy_from_active();
+
+        assert_eq!(settings.base_url, DEEPSEEK_BASE_URL);
+        assert_eq!(settings.api_key, "secret");
+        assert_eq!(settings.model, "deepseek-flash");
     }
 }

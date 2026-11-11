@@ -1,4 +1,6 @@
-use crate::store::{effective_language, normalize_base_url, origin_from_base_url, Settings};
+use crate::store::{
+    effective_language, normalize_base_url, origin_from_base_url, Provider, Settings,
+};
 use crate::tools;
 use crate::AppState;
 use futures_util::StreamExt;
@@ -50,6 +52,10 @@ pub struct ChatRequest {
     pub confirm_writes: bool,
     pub confirm_shell: bool,
     pub workspace: String,
+    #[serde(default)]
+    pub provider_kind: String,
+    #[serde(default)]
+    pub provider_name: String,
 }
 
 #[tauri::command]
@@ -67,6 +73,13 @@ pub fn get_dev_prompt() -> Option<String> {
     std::env::var("LUMO_DESKTOP_DEV_PROMPT")
         .ok()
         .filter(|value| !value.trim().is_empty())
+}
+
+#[tauri::command]
+pub fn get_dev_agent() -> bool {
+    std::env::var("LUMO_DESKTOP_DEV_AGENT")
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
 }
 
 #[derive(Serialize)]
@@ -120,27 +133,74 @@ pub fn get_dev_attachment() -> Option<DevAttachment> {
 pub fn save_settings(
     app: AppHandle,
     state: State<'_, AppState>,
-    settings: Settings,
+    mut settings: Settings,
 ) -> Result<(), String> {
-    state.store.save_settings(&settings)?;
+    state.store.save_settings(&mut settings)?;
     crate::tray::update_menu(&app, &settings);
     Ok(())
 }
 
 #[tauri::command]
-pub fn save_conversations(
-    state: State<'_, AppState>,
-    conversations: Value,
-) -> Result<(), String> {
+pub fn save_conversations(state: State<'_, AppState>, conversations: Value) -> Result<(), String> {
     state.store.save_conversations(&conversations)
 }
 
 #[tauri::command]
-pub async fn check_health(
-    state: State<'_, AppState>,
-    settings: Settings,
-) -> Result<Value, String> {
+pub async fn check_health(state: State<'_, AppState>, settings: Settings) -> Result<Value, String> {
     let lang = effective_language(&settings);
+    let provider = settings.provider().cloned();
+    let kind = provider
+        .as_ref()
+        .map(|provider| provider.kind.as_str())
+        .unwrap_or("lumo");
+    let provider_name = provider
+        .as_ref()
+        .map(|provider| provider.name.as_str())
+        .unwrap_or("lumo-tamer");
+
+    if kind != "lumo" {
+        let base = provider
+            .as_ref()
+            .map(|provider| normalize_base_url(&provider.base_url))
+            .unwrap_or_else(|| normalize_base_url(&settings.base_url));
+        let url = format!("{base}/models");
+        let api_key = provider
+            .as_ref()
+            .map(|provider| provider.api_key.as_str())
+            .unwrap_or(settings.api_key.as_str());
+
+        let mut request = state.client.get(&url).timeout(Duration::from_secs(8));
+        if !api_key.trim().is_empty() {
+            request = request.bearer_auth(api_key.trim());
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|error| friendly_network_error(&url, &error, lang))?;
+        let status = response.status();
+        let body = response.text().await.map_err(|error| error.to_string())?;
+
+        if !status.is_success() {
+            return Err(http_error(lang, status.as_u16(), &body));
+        }
+
+        let parsed: Value = serde_json::from_str(&body).unwrap_or_else(|_| json!({}));
+        let models = parsed
+            .get("data")
+            .and_then(Value::as_array)
+            .map(|items| items.len())
+            .unwrap_or(0);
+
+        return Ok(json!({
+            "status": "ok",
+            "provider": provider_name,
+            "kind": kind,
+            "auth": { "valid": true },
+            "models": models
+        }));
+    }
+
     let origin = origin_from_base_url(&normalize_base_url(&settings.base_url));
     let url = format!("{origin}/health");
 
@@ -159,13 +219,18 @@ pub async fn check_health(
         return Err(http_error(lang, status.as_u16(), &body));
     }
 
-    serde_json::from_str::<Value>(&body).map_err(|e| {
+    let mut health = serde_json::from_str::<Value>(&body).map_err(|e| {
         format!(
             "{}: {e} — {}",
             tr(lang, "Réponse /health invalide", "Invalid /health response"),
             truncate(&body, 300)
         )
-    })
+    })?;
+    if let Some(object) = health.as_object_mut() {
+        object.insert("provider".into(), json!(provider_name));
+        object.insert("kind".into(), json!(kind));
+    }
+    Ok(health)
 }
 
 #[tauri::command]
@@ -222,13 +287,18 @@ pub async fn list_models(
     if models.is_empty() {
         return Err(tr(
             lang,
-            "Aucun modèle renvoyé par lumo-tamer",
-            "lumo-tamer returned no models",
+            "Aucun modèle renvoyé par le fournisseur",
+            "The provider returned no models",
         )
         .to_string());
     }
 
     Ok(models)
+}
+
+#[tauri::command]
+pub fn detect_opencode_providers() -> Vec<Provider> {
+    crate::store::import_opencode_providers()
 }
 
 #[tauri::command]
@@ -275,8 +345,8 @@ pub async fn extract_memories(
         return Err(http_error(lang, status.as_u16(), &body));
     }
 
-    let value: Value = serde_json::from_str(&body)
-        .map_err(|error| format!("Invalid memory response: {error}"))?;
+    let value: Value =
+        serde_json::from_str(&body).map_err(|error| format!("Invalid memory response: {error}"))?;
     let content = value
         .get("choices")
         .and_then(Value::as_array)
@@ -324,12 +394,7 @@ pub fn start_chat(
         return Err(tr(lang, "requestId manquant", "Missing requestId").to_string());
     }
     if request.messages.is_empty() {
-        return Err(tr(
-            lang,
-            "Aucun message à envoyer",
-            "No message to send",
-        )
-        .to_string());
+        return Err(tr(lang, "Aucun message à envoyer", "No message to send").to_string());
     }
 
     let request_id = request.request_id.clone();
@@ -501,10 +566,7 @@ async fn run_chat(
     token: CancellationToken,
 ) {
     let request_id = request.request_id.clone();
-    emit(
-        &app,
-        json!({ "requestId": request_id, "type": "started" }),
-    );
+    emit(&app, json!({ "requestId": request_id, "type": "started" }));
 
     let outcome = perform_chat(&app, &client, &request, &token).await;
 
@@ -551,6 +613,12 @@ async fn perform_chat(
     token: &CancellationToken,
 ) -> Outcome {
     let lang = if request.language == "fr" { "fr" } else { "en" };
+    let provider_kind = request.provider_kind.trim();
+    let provider_label = if request.provider_name.trim().is_empty() {
+        "API"
+    } else {
+        request.provider_name.trim()
+    };
     let base = normalize_base_url(&request.base_url);
     let url = format!("{base}/chat/completions");
     let workspace = tools::canonical_workspace(&request.workspace);
@@ -559,7 +627,6 @@ async fn perform_chat(
     } else {
         Vec::new()
     };
-
 
     let mut messages: Vec<Value> = Vec::new();
     let mut system_prompt = request
@@ -619,7 +686,7 @@ async fn perform_chat(
             "stream": true,
             "messages": messages,
         });
-        if request.thinking {
+        if request.thinking && provider_kind == "lumo" {
             body["reasoning_effort"] = json!("high");
         }
         if let Some(temperature) = request.temperature {
@@ -714,10 +781,7 @@ async fn perform_chat(
                         .and_then(Value::as_str)
                         .map(str::to_string)
                         .unwrap_or_else(|| error.to_string());
-                    return Outcome::Error(format!(
-                        "{}: {message}",
-                        tr(lang, "Erreur lumo-tamer", "lumo-tamer error")
-                    ));
+                    return Outcome::Error(format!("{provider_label}: {message}"));
                 }
 
                 if let Some(usage) = value.get("usage").filter(|usage| !usage.is_null()) {
@@ -770,10 +834,8 @@ async fn perform_chat(
 
                     if let Some(calls) = delta.get("tool_calls").and_then(Value::as_array) {
                         for call in calls {
-                            let index = call
-                                .get("index")
-                                .and_then(Value::as_u64)
-                                .unwrap_or(0) as usize;
+                            let index =
+                                call.get("index").and_then(Value::as_u64).unwrap_or(0) as usize;
                             let entry = tool_calls.entry(index).or_default();
                             if let Some(id) = call.get("id").and_then(Value::as_str) {
                                 if !id.is_empty() {
@@ -1036,7 +1098,6 @@ async fn request_tool_permission(
         result = receiver => result.unwrap_or_else(|_| "deny".to_string()),
     };
 
-
     if let Ok(mut map) = app.state::<AppState>().permissions.lock() {
         map.remove(permission_id);
     }
@@ -1068,26 +1129,47 @@ fn tr<'a>(lang: &str, french: &'a str, english: &'a str) -> &'a str {
 fn http_error(lang: &str, status: u16, body: &str) -> String {
     format!(
         "{} {status}: {}",
-        tr(lang, "lumo-tamer a répondu HTTP", "lumo-tamer returned HTTP"),
+        tr(lang, "L'API a répondu HTTP", "API returned HTTP"),
         truncate(body, 800)
     )
 }
 
 fn friendly_network_error(url: &str, error: &reqwest::Error, lang: &str) -> String {
+    let is_local_tamer =
+        url.contains("3003") || url.contains("127.0.0.1") || url.contains("localhost");
     if error.is_connect() {
-        format!(
-            "{} {url}. {}",
-            tr(lang, "Impossible de joindre lumo-tamer sur", "Cannot reach lumo-tamer at"),
-            tr(
-                lang,
-                "Vérifie que le conteneur tourne : `docker compose up -d tamer`.",
-                "Make sure the container is running: `docker compose up -d tamer`."
+        if is_local_tamer {
+            format!(
+                "{} {url}. {}",
+                tr(
+                    lang,
+                    "Impossible de joindre lumo-tamer sur",
+                    "Cannot reach lumo-tamer at"
+                ),
+                tr(
+                    lang,
+                    "Vérifie que le conteneur tourne : `docker compose up -d tamer`.",
+                    "Make sure the container is running: `docker compose up -d tamer`."
+                )
             )
-        )
+        } else {
+            format!(
+                "{} {url}.",
+                tr(
+                    lang,
+                    "Impossible de joindre l'API sur",
+                    "Cannot reach the API at"
+                )
+            )
+        }
     } else if error.is_timeout() {
         format!(
             "{} {url}.",
-            tr(lang, "lumo-tamer ne répond pas sur", "lumo-tamer did not respond at")
+            tr(
+                lang,
+                "L'API ne répond pas sur",
+                "The API did not respond at"
+            )
         )
     } else {
         format!(
