@@ -543,6 +543,14 @@ pub fn open_external(url: String) -> Result<(), String> {
     open::that(trimmed).map_err(|error| format!("Cannot open link: {error}"))
 }
 
+#[tauri::command]
+pub fn quit_app(app: AppHandle, state: State<'_, AppState>) {
+    state
+        .quitting
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    app.exit(0);
+}
+
 enum Outcome {
     Done {
         finish_reason: Option<String>,

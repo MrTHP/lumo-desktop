@@ -19,6 +19,39 @@ const PRETTY_MODELS = {
 
 const DEFAULT_MODELS = ["lumo", "lumo-lite", "lumo-max"];
 
+const IMAGE_RESOLUTIONS = [
+  { id: "2x1-1024", label: "2:1 — 1408 × 704", width: 1408, height: 704, tier: "1024" },
+  { id: "3x2-1024", label: "3:2 — 1248 × 832", width: 1248, height: 832, tier: "1024" },
+  { id: "1x1-1024", label: "1:1 — 1024 × 1024", width: 1024, height: 1024, tier: "1024" },
+  { id: "2x3-1024", label: "2:3 — 832 × 1248", width: 832, height: 1248, tier: "1024" },
+  { id: "1x2-1024", label: "1:2 — 704 × 1408", width: 704, height: 1408, tier: "1024" },
+  { id: "2x1-512", label: "2:1 — 704 × 352", width: 704, height: 352, tier: "512" },
+  { id: "3x2-512", label: "3:2 — 576 × 384", width: 576, height: 384, tier: "512" },
+  { id: "1x1-512", label: "1:1 — 512 × 512", width: 512, height: 512, tier: "512" },
+  { id: "2x3-512", label: "2:3 — 384 × 576", width: 384, height: 576, tier: "512" },
+  { id: "1x2-512", label: "1:2 — 352 × 704", width: 352, height: 704, tier: "512" },
+];
+
+const IMAGE_FAMILIES = [
+  { value: "bonsai-ternary", label: "Bonsai · Ternary" },
+  { value: "bonsai-binary", label: "Bonsai · Binary" },
+];
+
+const IMAGE_SAMPLES = [
+  "imageStudio.sample1",
+  "imageStudio.sample2",
+  "imageStudio.sample3",
+  "imageStudio.sample4",
+];
+
+function imageResolutionById(id) {
+  return (
+    IMAGE_RESOLUTIONS.find((resolution) => resolution.id === id) ||
+    IMAGE_RESOLUTIONS.find((resolution) => resolution.id === "1x1-512")
+  );
+}
+
+
 const app = {
   settings: null,
   conversations: [],
@@ -54,6 +87,14 @@ const app = {
   favoriteOnly: false,
   libraryTab: "creations",
   librarySearch: "",
+  generatedImages: [],
+  imageStatus: null,
+  imageBusy: false,
+  imageMode: "single",
+  imageRequestId: null,
+  imageAbort: false,
+  imageActive: null,
+  imageBatch: [],
   pendingProjectId: null,
   pendingProjectDelete: null,
   pendingMoveId: null,
@@ -112,6 +153,8 @@ async function boot() {
   updateComposerState();
   $("data-dir").textContent = app.dataDir;
   refreshWebSearch();
+  initImageStudio();
+  loadGeneratedImages();
 
   await listen("chat-event", onChatEvent);
   await listen("agent-event", onAgentEvent);
@@ -199,6 +242,14 @@ function defaultSettings() {
     projectFilesAccess: "current",
     creationsEnabled: true,
     visualizationsEnabled: true,
+    imageBaseUrl: "http://127.0.0.1:8000",
+    bonsaiDir: "",
+    imageModel: "bonsai-ternary",
+    imageSteps: 4,
+    imageGuidance: 1.0,
+    imageResolution: "1x1-512",
+    imageBatchSize: 4,
+    imageUnloadOnQuit: true,
     providers: [],
     activeProvider: "",
     opencodeBinary: "opencode",
@@ -632,6 +683,25 @@ const I18N = {
     "settings.tab.general": "Général",
     "settings.tab.tools": "Outils",
     "settings.tab.agent": "Agent",
+    "settings.tab.images": "Images",
+    "settings.imageSection": "Bonsai Image (local)",
+    "settings.imageHint": "Model Desk se connecte au backend du Bonsai Image Demo (PrismML). Le serveur garde les poids du modèle en mémoire et expose /generate sur le port 8000.",
+    "settings.imageUrl": "URL du backend Bonsai",
+    "settings.imageUrlHint": "Adresse du serveur FastAPI lancé par `./scripts/serve.sh` dans Bonsai-Image-Demo.",
+    "settings.imageDir": "Dossier Bonsai-Image-Demo",
+    "settings.imageModel": "Variante par défaut",
+    "settings.imageResolution": "Résolution par défaut",
+    "settings.imageSteps": "Étapes par défaut",
+    "settings.imageGuidance": "Guidage par défaut",
+    "settings.imageBatch": "Taille du lot",
+    "settings.imageTest": "Tester le backend",
+    "settings.imageUnload": "Décharger le modèle",
+    "settings.imageUnloadOnQuit": "Décharger le modèle Bonsai de la mémoire GPU quand Model Desk quitte",
+    "settings.imageCommandHint": "Le premier lancement télécharge les poids et prépare les kernels GPU (plusieurs minutes). Garde `serve.sh` ouvert pendant que tu génères des images.",
+    "settings.imageCredit": "Bonsai Image Demo est un projet PrismML (licence Apache-2.0). Model Desk fournit seulement l'interface et se connecte à ton serveur local.",
+    "settings.imageTestOk": "✓ Backend Bonsai prêt · {kind} · {family}",
+    "settings.imageTestUnhealthy": "Backend en ligne, mais le GPU n'est pas prêt : {reason}",
+    "settings.imageTestOffline": "✗ {error}",
 
     "pages.allChats": "Toutes les conversations",
     "pages.allChatsSub": "Toutes tes conversations, classées par projet.",
@@ -651,11 +721,63 @@ const I18N = {
     "pages.images": "Images",
     "pages.imagePrompt": "Décrivez votre image…",
     "pages.createImage": "Créer",
-    "pages.imageUnsupported": "La génération d'images native n'est pas exposée par lumo-tamer.",
     "pages.noCreations": "Aucune création pour le moment. Active « Créations » dans les outils et demande un document ou une page HTML/SVG.",
-    "pages.noImages": "Aucune image dans tes conversations pour le moment.",
+    "pages.noImages": "Aucune image pour le moment. Génère ta première image avec Bonsai ci-dessus.",
     "pages.favorites": "Favoris",
     "pages.favoritesSub": "Tes conversations épinglées.",
+
+    "imageStudio.title": "Studio d'images · Bonsai",
+    "imageStudio.subtitle": "Génération locale avec Bonsai Image (backend PrismML), sans quitter Model Desk.",
+    "imageStudio.statusChecking": "Vérification…",
+    "imageStudio.statusReady": "Connecté · {kind} · {family}",
+    "imageStudio.statusUnhealthy": "Backend en ligne, GPU indisponible ({reason})",
+    "imageStudio.statusOffline": "Backend injoignable",
+    "imageStudio.statusUnloaded": "Connecté · modèle déchargé",
+    "imageStudio.unload": "Décharger le modèle",
+    "imageStudio.unloading": "Déchargement…",
+    "imageStudio.unloaded": "Modèle Bonsai déchargé ({mb} Mo libérés)",
+    "imageStudio.unloadedNoop": "Le modèle Bonsai est déjà déchargé",
+    "imageStudio.refresh": "Actualiser",
+    "imageStudio.configure": "Configurer",
+    "imageStudio.promptPlaceholder": "Décrivez votre image…",
+    "imageStudio.model": "Modèle",
+    "imageStudio.resolution": "Résolution",
+    "imageStudio.poster": "Poster",
+    "imageStudio.quick": "Rapide",
+    "imageStudio.seed": "Seed",
+    "imageStudio.randomSeed": "Seed aléatoire",
+    "imageStudio.steps": "Étapes",
+    "imageStudio.guidance": "Guidage",
+    "imageStudio.mode": "Mode",
+    "imageStudio.single": "Unique",
+    "imageStudio.batch": "Lot de 4",
+    "imageStudio.batchN": "Lot de {n}",
+    "imageStudio.generate": "Générer",
+    "imageStudio.generating": "Génération…",
+    "imageStudio.progress": "{done}/{total}",
+    "imageStudio.stop": "Arrêter",
+    "imageStudio.errorPrompt": "Décris d'abord l'image que tu veux générer.",
+    "imageStudio.errorOffline": "Le backend Bonsai est injoignable. Lance `./scripts/serve.sh` dans le dossier Bonsai-Image-Demo, puis actualise le statut.",
+    "imageStudio.download": "Télécharger",
+    "imageStudio.reuse": "Réutiliser",
+    "imageStudio.delete": "Supprimer",
+    "imageStudio.gallery": "Galerie",
+    "imageStudio.clear": "Tout effacer",
+    "imageStudio.clearConfirm": "Supprimer toutes les images générées ? Cette action est irréversible.",
+    "imageStudio.emptyHistory": "Aucune image générée pour le moment.",
+    "imageStudio.stats": "{width} × {height} · seed {seed} · {steps} étapes · {seconds} s",
+    "imageStudio.peak": " · pic {mb} Mo",
+    "imageStudio.saved": "Image enregistrée dans la bibliothèque",
+    "imageStudio.deleted": "Image supprimée",
+    "imageStudio.cleared": "Historique d'images effacé",
+    "imageStudio.cancelled": "Génération annulée",
+    "imageStudio.generated": "Image générée",
+    "imageStudio.batchTitle": "Lot de {n}",
+    "imageStudio.modelUnknown": "Modèle inconnu",
+    "imageStudio.sample1": "Un bonsaï de glace dans une forêt pluvieuse, montagnes enneigées, photo réaliste",
+    "imageStudio.sample2": "Un petit jardin de mousse sur un rebord de fenêtre, pluie sur la vitre, photo argentique chaleureuse",
+    "imageStudio.sample3": "Un renard roux blotti sous des lanternes en papier, style lavis d'encre, ombres douces",
+    "imageStudio.sample4": "Une ville en terrarium de verre la nuit, rues miniatures, vitrines lumineuses",
 
     "profile.name": "Comment Lumo devrait-il t'appeler ?",
     "profile.occupation": "Que fais-tu ?",
@@ -692,7 +814,7 @@ const I18N = {
     "general.data": "Vos données",
     "general.resetSearch": "Réinitialiser l'index de recherche",
     "general.deleteAll": "Supprimer toutes les données",
-    "general.deleteHint": "Supprime les conversations, projets, souvenirs, pièces jointes et réglages locaux.",
+    "general.deleteHint": "Supprime les conversations, projets, souvenirs, images générées, pièces jointes et réglages locaux.",
 
     "projects.new": "Nouveau projet",
     "projects.subtitle": "Les projets gardent les conversations, les instructions et le contexte ensemble.",
@@ -720,6 +842,7 @@ const I18N = {
     "tools.creations": "Créations",
     "tools.visualizations": "Visualisations",
     "tools.createImage": "Créer une image",
+    "tools.bonsai": "Bonsai",
     "tools.customLumos": "Custom Lumos",
     "tools.unsupported": "indisponible",
     "tools.webSearchEnabled": "Recherche web activée",
@@ -1024,6 +1147,25 @@ const I18N = {
     "settings.tab.general": "General",
     "settings.tab.tools": "Tools",
     "settings.tab.agent": "Agent",
+    "settings.tab.images": "Images",
+    "settings.imageSection": "Bonsai Image (local)",
+    "settings.imageHint": "Model Desk connects to the Bonsai Image Demo backend (PrismML). The server keeps model weights in memory and exposes /generate on port 8000.",
+    "settings.imageUrl": "Bonsai backend URL",
+    "settings.imageUrlHint": "Address of the FastAPI server started by `./scripts/serve.sh` in Bonsai-Image-Demo.",
+    "settings.imageDir": "Bonsai-Image-Demo folder",
+    "settings.imageModel": "Default variant",
+    "settings.imageResolution": "Default resolution",
+    "settings.imageSteps": "Default steps",
+    "settings.imageGuidance": "Default guidance",
+    "settings.imageBatch": "Batch size",
+    "settings.imageTest": "Test backend",
+    "settings.imageUnload": "Unload model",
+    "settings.imageUnloadOnQuit": "Unload the Bonsai model from GPU memory when Model Desk quits",
+    "settings.imageCommandHint": "The first launch downloads weights and prepares GPU kernels (several minutes). Keep `serve.sh` running while you generate images.",
+    "settings.imageCredit": "Bonsai Image Demo is a PrismML project (Apache-2.0). Model Desk only provides the interface and connects to your local server.",
+    "settings.imageTestOk": "✓ Bonsai backend ready · {kind} · {family}",
+    "settings.imageTestUnhealthy": "Backend online, but the GPU is not ready: {reason}",
+    "settings.imageTestOffline": "✗ {error}",
 
     "pages.allChats": "All chats",
     "pages.allChatsSub": "All your conversations, grouped by project.",
@@ -1043,11 +1185,63 @@ const I18N = {
     "pages.images": "Images",
     "pages.imagePrompt": "Describe your image…",
     "pages.createImage": "Create",
-    "pages.imageUnsupported": "Native image generation is not exposed by lumo-tamer.",
     "pages.noCreations": "No creations yet. Enable “Creations” in the tools menu and ask for a document or an HTML/SVG page.",
-    "pages.noImages": "No images in your conversations yet.",
+    "pages.noImages": "No images yet. Generate your first one with Bonsai above.",
     "pages.favorites": "Favorites",
     "pages.favoritesSub": "Your pinned conversations.",
+
+    "imageStudio.title": "Image studio · Bonsai",
+    "imageStudio.subtitle": "Run Bonsai Image locally (PrismML backend) without leaving Model Desk.",
+    "imageStudio.statusChecking": "Checking…",
+    "imageStudio.statusReady": "Connected · {kind} · {family}",
+    "imageStudio.statusUnhealthy": "Backend online, GPU unavailable ({reason})",
+    "imageStudio.statusOffline": "Backend unreachable",
+    "imageStudio.statusUnloaded": "Connected · model unloaded",
+    "imageStudio.unload": "Unload model",
+    "imageStudio.unloading": "Unloading…",
+    "imageStudio.unloaded": "Bonsai model unloaded ({mb} MB freed)",
+    "imageStudio.unloadedNoop": "The Bonsai model is already unloaded",
+    "imageStudio.refresh": "Refresh",
+    "imageStudio.configure": "Configure",
+    "imageStudio.promptPlaceholder": "Describe what you want to create…",
+    "imageStudio.model": "Model",
+    "imageStudio.resolution": "Resolution",
+    "imageStudio.poster": "Poster",
+    "imageStudio.quick": "Quick",
+    "imageStudio.seed": "Seed",
+    "imageStudio.randomSeed": "Randomize seed",
+    "imageStudio.steps": "Steps",
+    "imageStudio.guidance": "Guidance",
+    "imageStudio.mode": "Mode",
+    "imageStudio.single": "Single",
+    "imageStudio.batch": "Batch of 4",
+    "imageStudio.batchN": "Batch of {n}",
+    "imageStudio.generate": "Generate",
+    "imageStudio.generating": "Generating…",
+    "imageStudio.progress": "{done}/{total}",
+    "imageStudio.stop": "Stop",
+    "imageStudio.errorPrompt": "Describe the image you want to generate first.",
+    "imageStudio.errorOffline": "The Bonsai backend is unreachable. Run `./scripts/serve.sh` in the Bonsai-Image-Demo folder, then refresh the status.",
+    "imageStudio.download": "Download",
+    "imageStudio.reuse": "Reuse",
+    "imageStudio.delete": "Delete",
+    "imageStudio.gallery": "Gallery",
+    "imageStudio.clear": "Clear all",
+    "imageStudio.clearConfirm": "Delete every generated image? This cannot be undone.",
+    "imageStudio.emptyHistory": "No generated images yet.",
+    "imageStudio.stats": "{width} × {height} · seed {seed} · {steps} steps · {seconds}s",
+    "imageStudio.peak": " · peak {mb} MB",
+    "imageStudio.saved": "Image saved to the library",
+    "imageStudio.deleted": "Image deleted",
+    "imageStudio.cleared": "Image history cleared",
+    "imageStudio.cancelled": "Generation cancelled",
+    "imageStudio.generated": "Image generated",
+    "imageStudio.batchTitle": "Batch of {n}",
+    "imageStudio.modelUnknown": "Unknown model",
+    "imageStudio.sample1": "An icy bonsai tree in a rainy forest, snowy mountains in the background, photorealistic",
+    "imageStudio.sample2": "A tiny moss garden on a windowsill, rain on the glass, warm film photography",
+    "imageStudio.sample3": "A red fox curled beneath paper lanterns, ink wash style, gentle shadows",
+    "imageStudio.sample4": "A glass terrarium city at night, miniature streets, glowing storefronts",
 
     "profile.name": "What should Lumo call you?",
     "profile.occupation": "What do you do?",
@@ -1084,7 +1278,7 @@ const I18N = {
     "general.data": "Your data",
     "general.resetSearch": "Reset search index",
     "general.deleteAll": "Delete all data",
-    "general.deleteHint": "Deletes conversations, projects, memories, attachments and local settings.",
+    "general.deleteHint": "Deletes conversations, projects, memories, generated images, attachments and local settings.",
 
     "projects.new": "New project",
     "projects.subtitle": "Projects keep conversations, instructions and context together.",
@@ -1112,6 +1306,7 @@ const I18N = {
     "tools.creations": "Creations",
     "tools.visualizations": "Visualizations",
     "tools.createImage": "Create an image",
+    "tools.bonsai": "Bonsai",
     "tools.customLumos": "Custom Lumos",
     "tools.unsupported": "unavailable",
     "tools.webSearchEnabled": "Web search enabled",
@@ -1280,6 +1475,15 @@ function applyTranslations() {
   document.querySelectorAll("[data-i18n-aria-label]").forEach((element) => {
     element.setAttribute("aria-label", t(element.dataset.i18nAriaLabel));
   });
+  if (app.settings && $("image-resolution")) {
+    const resolution = $("image-resolution").value;
+    const settingResolution = $("setting-image-resolution").value;
+    fillImageResolutionSelect($("image-resolution"));
+    fillImageResolutionSelect($("setting-image-resolution"));
+    $("image-resolution").value = resolution;
+    $("setting-image-resolution").value = settingResolution;
+    updateImageMode();
+  }
   updateKeyToggleLabel();
 }
 
@@ -1571,13 +1775,45 @@ function bindUi() {
   $("library-tab-images").addEventListener("click", () => {
     app.libraryTab = "images";
     renderLibrary();
+    refreshImageStatus({ quiet: true });
   });
-  $("library-create-image").addEventListener("click", () =>
-    showToast(t("pages.imageUnsupported"), true)
-  );
-  $("tool-create-image").addEventListener("click", () =>
-    showToast(t("pages.imageUnsupported"), true)
-  );
+  $("tool-create-image").addEventListener("click", () => {
+    $("tools-menu").classList.add("hidden");
+    openImageStudio();
+  });
+
+  $("image-form").addEventListener("submit", generateImages);
+  $("image-seed-random").addEventListener("click", randomizeImageSeed);
+  $("image-stop").addEventListener("click", stopImageGeneration);
+  $("image-status-refresh").addEventListener("click", () => refreshImageStatus());
+  $("image-status-unload").addEventListener("click", unloadImageModel);
+  $("unload-image-connection").addEventListener("click", unloadImageModel);
+  $("image-status-configure").addEventListener("click", () => {
+    openSettings();
+    selectSettingsTab("images");
+  });
+  $("image-reuse").addEventListener("click", reuseGeneratedImage);
+  $("image-delete").addEventListener("click", deleteActiveGeneratedImage);
+  $("image-clear").addEventListener("click", clearGeneratedImages);
+  $("test-image-connection").addEventListener("click", testImageConnection);
+  document.querySelectorAll("[data-image-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      app.imageMode = button.dataset.imageMode === "batch" ? "batch" : "single";
+      updateImageMode();
+    });
+  });
+  $("image-resolution").addEventListener("change", saveImageDefaults);
+  $("image-model").addEventListener("change", saveImageDefaults);
+  $("image-steps").addEventListener("change", saveImageDefaults);
+  $("image-guidance").addEventListener("change", saveImageDefaults);
+  $("image-samples").addEventListener("click", (event) => {
+    const sample = event.target.closest("[data-image-sample]");
+    if (!sample) return;
+    $("image-prompt").value = sample.dataset.i18n
+      ? t(sample.dataset.i18n)
+      : sample.dataset.imageSample || "";
+    $("image-prompt").focus();
+  });
 
   $("tools-btn").addEventListener("click", (event) => {
     event.stopPropagation();
@@ -2183,59 +2419,17 @@ function renderLibrary() {
     app.libraryTab === "creations"
   );
   $("library-tab-images").classList.toggle("active", app.libraryTab === "images");
+  $("image-studio").classList.toggle("hidden", app.libraryTab !== "images");
 
   const container = $("library-content");
   container.innerHTML = "";
-  const query = (app.librarySearch || "").toLowerCase();
 
   if (app.libraryTab === "images") {
-    const images = [];
-    for (const conversation of app.conversations) {
-      for (const message of conversation.messages) {
-        for (const attachment of message.attachments || []) {
-          if (attachment.kind === "image" && attachment.thumbnail) {
-            images.push({ attachment, conversation });
-          }
-        }
-      }
-    }
-    const filtered = images.filter(({ attachment, conversation }) =>
-      `${conversation.title} ${attachment.name}`
-        .toLowerCase()
-        .includes(query)
-    );
-    if (!filtered.length) {
-      container.innerHTML = `<p class="settings-hint">${escapeHtml(
-        t("pages.noImages")
-      )}</p>`;
-      return;
-    }
-    for (const { attachment, conversation } of filtered) {
-      const card = document.createElement("button");
-      card.type = "button";
-      card.className = "library-card";
-      const thumb = document.createElement("div");
-      thumb.className = "library-thumb";
-      const image = document.createElement("img");
-      image.src = attachment.thumbnail;
-      image.alt = attachment.name;
-      thumb.appendChild(image);
-      const body = document.createElement("div");
-      body.className = "library-card-body";
-      const title = document.createElement("div");
-      title.className = "library-card-title";
-      title.textContent = attachment.name;
-      const sub = document.createElement("div");
-      sub.className = "library-card-sub";
-      sub.textContent = conversation.title;
-      body.append(title, sub);
-      card.append(thumb, body);
-      card.addEventListener("click", () => openImagePreview(attachment));
-      container.appendChild(card);
-    }
+    renderImageGallery();
     return;
   }
 
+  const query = (app.librarySearch || "").toLowerCase();
   const creations = [];
   const pattern = /```(html|svg)\s*\n([\s\S]*?)```/gi;
   for (const conversation of app.conversations) {
@@ -2290,6 +2484,684 @@ function renderLibrary() {
     container.appendChild(card);
   }
 }
+
+/* --------------------------------------------------------------------------
+ * Bonsai image studio
+ * ----------------------------------------------------------------------- */
+
+function renderImageGallery() {
+  const container = $("library-content");
+  const query = (app.librarySearch || "").toLowerCase();
+  const generated = (app.generatedImages || []).filter((entry) =>
+    `${entry.prompt} ${entry.width}x${entry.height} ${entry.seed}`
+      .toLowerCase()
+      .includes(query)
+  );
+
+  const attachments = [];
+  for (const conversation of app.conversations) {
+    for (const message of conversation.messages) {
+      for (const attachment of message.attachments || []) {
+        if (attachment.kind === "image" && attachment.thumbnail) {
+          attachments.push({ attachment, conversation });
+        }
+      }
+    }
+  }
+  attachments.sort((a, b) => b.conversation.updatedAt - a.conversation.updatedAt);
+  const filteredAttachments = attachments.filter(({ attachment, conversation }) =>
+    `${conversation.title} ${attachment.name}`.toLowerCase().includes(query)
+  );
+
+  $("image-clear").classList.toggle("hidden", !(app.generatedImages || []).length);
+
+  if (!generated.length && !filteredAttachments.length) {
+    container.innerHTML = `<p class="settings-hint">${escapeHtml(
+      query ? t("sidebar.noResults") : t("pages.noImages")
+    )}</p>`;
+    return;
+  }
+
+  for (const entry of generated) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "library-card";
+    const thumb = document.createElement("div");
+    thumb.className = "library-thumb";
+    if (entry.thumbnailUrl) {
+      const image = document.createElement("img");
+      image.src = entry.thumbnailUrl;
+      image.alt = entry.prompt;
+      image.loading = "lazy";
+      thumb.appendChild(image);
+    } else {
+      thumb.innerHTML = icon("image");
+    }
+    const body = document.createElement("div");
+    body.className = "library-card-body";
+    const title = document.createElement("div");
+    title.className = "library-card-title";
+    title.textContent = entry.prompt || t("imageStudio.generated");
+    const sub = document.createElement("div");
+    sub.className = "library-card-sub";
+    sub.textContent = `${entry.width} × ${entry.height} · seed ${entry.seed}`;
+    body.append(title, sub);
+    card.append(thumb, body);
+    card.addEventListener("click", () => selectGeneratedImage(entry.id));
+    container.appendChild(card);
+  }
+
+  for (const { attachment, conversation } of filteredAttachments) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "library-card";
+    const thumb = document.createElement("div");
+    thumb.className = "library-thumb";
+    const image = document.createElement("img");
+    image.src = attachment.thumbnail;
+    image.alt = attachment.name;
+    image.loading = "lazy";
+    thumb.appendChild(image);
+    const body = document.createElement("div");
+    body.className = "library-card-body";
+    const title = document.createElement("div");
+    title.className = "library-card-title";
+    title.textContent = attachment.name;
+    const sub = document.createElement("div");
+    sub.className = "library-card-sub";
+    sub.textContent = conversation.title;
+    body.append(title, sub);
+    card.append(thumb, body);
+    card.addEventListener("click", () => openImagePreview(attachment));
+    container.appendChild(card);
+  }
+}
+
+function initImageStudio() {
+  fillImageResolutionSelect($("image-resolution"));
+  fillImageResolutionSelect($("setting-image-resolution"));
+  fillImageModelSelect();
+  $("image-resolution").value = imageResolutionById(
+    app.settings.imageResolution
+  ).id;
+  $("setting-image-resolution").value = $("image-resolution").value;
+  $("image-steps").value = String(Math.max(1, Number(app.settings.imageSteps) || 4));
+  $("setting-image-steps").value = $("image-steps").value;
+  const guidance = Number(app.settings.imageGuidance);
+  $("image-guidance").value = String(Number.isFinite(guidance) ? guidance : 1);
+  $("setting-image-guidance").value = $("image-guidance").value;
+  $("setting-image-batch").value = String(imageBatchSize());
+  randomizeImageSeed();
+
+  const samples = $("image-samples");
+  samples.innerHTML = "";
+  for (const key of IMAGE_SAMPLES) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "image-sample";
+    button.dataset.imageSample = t(key);
+    button.dataset.i18n = key;
+    button.textContent = t(key);
+    samples.appendChild(button);
+  }
+
+  app.imageMode = "single";
+  updateImageMode();
+  updateImageBusy();
+}
+
+function fillImageResolutionSelect(select) {
+  if (!select) return;
+  select.innerHTML = "";
+  for (const tier of ["1024", "512"]) {
+    const group = document.createElement("optgroup");
+    group.label =
+      tier === "1024" ? t("imageStudio.poster") : t("imageStudio.quick");
+    for (const resolution of IMAGE_RESOLUTIONS.filter(
+      (item) => item.tier === tier
+    )) {
+      const option = document.createElement("option");
+      option.value = resolution.id;
+      option.textContent = resolution.label;
+      group.appendChild(option);
+    }
+    select.appendChild(group);
+  }
+}
+
+function fillImageModelSelect() {
+  const select = $("image-model");
+  if (!select) return;
+  const status = app.imageStatus;
+  let families =
+    status?.ok && Array.isArray(status.supportedFamilies) && status.supportedFamilies.length
+      ? status.supportedFamilies.slice()
+      : IMAGE_FAMILIES.map((family) => family.value);
+  if (status?.defaultFamily && !families.includes(status.defaultFamily)) {
+    families.unshift(status.defaultFamily);
+  }
+  if (!families.length) families = ["bonsai-ternary"];
+
+  const current = select.value || app.settings.imageModel;
+  select.innerHTML = "";
+  for (const value of families) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = prettyImageFamily(value);
+    select.appendChild(option);
+  }
+  select.value = families.includes(current)
+    ? current
+    : families.includes(app.settings.imageModel)
+      ? app.settings.imageModel
+      : families.includes(status?.defaultFamily)
+        ? status.defaultFamily
+        : families[0];
+}
+
+function prettyImageFamily(value) {
+  return (
+    IMAGE_FAMILIES.find((family) => family.value === value)?.label ||
+    value ||
+    t("imageStudio.modelUnknown")
+  );
+}
+
+function imageBatchSize() {
+  const value = Number.parseInt(app.settings.imageBatchSize, 10);
+  return Math.max(2, Math.min(8, Number.isFinite(value) ? value : 4));
+}
+
+function updateImageMode() {
+  document.querySelectorAll("[data-image-mode]").forEach((button) => {
+    button.classList.toggle(
+      "active",
+      button.dataset.imageMode === app.imageMode
+    );
+  });
+  const batchButton = document.querySelector('[data-image-mode="batch"]');
+  if (batchButton) {
+    batchButton.textContent = t("imageStudio.batchN", { n: imageBatchSize() });
+  }
+}
+
+function randomizeImageSeed() {
+  $("image-seed").value = String(Math.floor(Math.random() * 2 ** 31));
+}
+
+function imageConfigFromForm() {
+  const resolution = imageResolutionById($("image-resolution").value);
+  const steps = Math.max(
+    1,
+    Math.min(50, Number.parseInt($("image-steps").value, 10) || 4)
+  );
+  const guidanceValue = Number.parseFloat($("image-guidance").value);
+  const guidance =
+    Number.isFinite(guidanceValue) && guidanceValue >= 0 ? guidanceValue : 1;
+  const seed = Math.max(
+    0,
+    Number.parseInt($("image-seed").value, 10) || 0
+  );
+  return {
+    prompt: $("image-prompt").value.trim(),
+    seed,
+    steps,
+    guidance,
+    resolution,
+    resolutionId: resolution.id,
+    family: $("image-model").value || app.settings.imageModel,
+    mode: app.imageMode,
+  };
+}
+
+function saveImageDefaults() {
+  if (!app.settings) return;
+  const resolution = $("image-resolution").value;
+  const family = $("image-model").value;
+  const steps = Number.parseInt($("image-steps").value, 10);
+  const guidance = Number.parseFloat($("image-guidance").value);
+  if (resolution) app.settings.imageResolution = resolution;
+  if (family) app.settings.imageModel = family;
+  if (Number.isFinite(steps) && steps > 0) app.settings.imageSteps = steps;
+  if (Number.isFinite(guidance) && guidance >= 0) {
+    app.settings.imageGuidance = guidance;
+  }
+  persistSettings();
+}
+
+function imageBackendFor(family) {
+  const kind = app.imageStatus?.kind;
+  if (!kind || !family) return "";
+  return `${family}-${kind}`;
+}
+
+function openImageStudio() {
+  app.libraryTab = "images";
+  showPage("library");
+  refreshImageStatus({ quiet: true });
+  setTimeout(() => {
+    $("image-prompt").focus();
+    $("image-studio").scrollIntoView({ behavior: "smooth", block: "start" });
+  }, 60);
+}
+
+async function refreshImageStatus({ quiet = false } = {}) {
+  if (!quiet) {
+    $("image-status-dot").className = "image-status-dot";
+    $("image-status-label").textContent = t("imageStudio.statusChecking");
+  }
+  try {
+    const status = await invoke("image_status", {
+      baseUrl: app.settings.imageBaseUrl || "",
+    });
+    app.imageStatus = status;
+  } catch (error) {
+    app.imageStatus = {
+      ok: false,
+      healthy: false,
+      kind: "",
+      defaultFamily: "",
+      supportedFamilies: [],
+      reason: "",
+      error: compactError(error),
+    };
+  }
+  updateImageStatusUi();
+  fillImageModelSelect();
+}
+
+function updateImageStatusUi() {
+  const status = app.imageStatus;
+  const dot = $("image-status-dot");
+  const label = $("image-status-label");
+  const unload = $("image-status-unload");
+  const settingsUnload = $("unload-image-connection");
+  dot.className = "image-status-dot";
+  label.title = "";
+  const canUnload = Boolean(
+    status?.ok && status.memorySupported && status.modelLoaded
+  );
+  unload.classList.toggle("hidden", !canUnload);
+  if (settingsUnload) settingsUnload.disabled = !canUnload;
+  if (!status) {
+    label.textContent = t("imageStudio.statusChecking");
+    return;
+  }
+  if (status.ok && status.healthy) {
+    dot.classList.add("ok");
+    if (status.memorySupported && !status.modelLoaded) {
+      label.textContent = t("imageStudio.statusUnloaded");
+    } else {
+      label.textContent = t("imageStudio.statusReady", {
+        kind: status.kind || "local",
+        family: prettyImageFamily(
+          status.defaultFamily || status.supportedFamilies?.[0]
+        ),
+      });
+    }
+    if (status.allocatedMb != null) {
+      label.title = `${Math.round(status.allocatedMb)} MB GPU${
+        status.reservedMb != null
+          ? ` · ${Math.round(status.reservedMb)} MB reserved`
+          : ""
+      }`;
+    }
+  } else if (status.ok) {
+    dot.classList.add("warn");
+    label.textContent = t("imageStudio.statusUnhealthy", {
+      reason: status.reason || "unknown",
+    });
+  } else {
+    dot.classList.add("bad");
+    label.textContent = t("imageStudio.statusOffline");
+    label.title = status.error || "";
+  }
+}
+
+function setImageError(message) {
+  const box = $("image-error");
+  if (!message) {
+    box.textContent = "";
+    box.classList.add("hidden");
+    return;
+  }
+  box.textContent = message;
+  box.classList.remove("hidden");
+}
+
+function updateImageBusy(step = 0, total = 0) {
+  const busy = app.imageBusy;
+  $("image-generate").disabled = busy;
+  $("image-stop").classList.toggle("hidden", !busy);
+  $("image-stop").disabled = false;
+  $("image-form")
+    .querySelectorAll("input, select, textarea")
+    .forEach((input) => {
+      input.disabled = busy;
+    });
+  $("image-seed-random").disabled = busy;
+  $("image-samples")
+    .querySelectorAll("button")
+    .forEach((button) => {
+      button.disabled = busy;
+    });
+  document.querySelectorAll("[data-image-mode]").forEach((button) => {
+    button.disabled = busy;
+  });
+  $("image-generate-label").textContent = busy
+    ? step && total
+      ? `${t("imageStudio.generating")} ${t("imageStudio.progress", {
+          done: step,
+          total,
+        })}`
+      : t("imageStudio.generating")
+    : t("imageStudio.generate");
+}
+
+async function generateImages(event) {
+  event.preventDefault();
+  if (app.imageBusy) return;
+  const config = imageConfigFromForm();
+  if (!config.prompt) {
+    setImageError(t("imageStudio.errorPrompt"));
+    $("image-prompt").focus();
+    return;
+  }
+
+  setImageError("");
+  saveImageDefaults();
+  app.imageBusy = true;
+  app.imageAbort = false;
+  app.imageBatch = [];
+  app.imageActive = null;
+  const total = config.mode === "batch" ? imageBatchSize() : 1;
+  const backend = imageBackendFor(config.family);
+  let generated = 0;
+  updateImageBusy(1, total);
+
+  for (let index = 0; index < total; index += 1) {
+    if (app.imageAbort) break;
+    updateImageBusy(generated + 1, total);
+    const requestId = uid("image");
+    app.imageRequestId = requestId;
+    try {
+      const entry = await invoke("generate_image", {
+        request: {
+          requestId,
+          prompt: config.prompt,
+          seed: config.seed + index,
+          steps: config.steps,
+          guidance: config.guidance,
+          width: config.resolution.width,
+          height: config.resolution.height,
+          backend,
+          family: config.family,
+          baseUrl: app.settings.imageBaseUrl || "",
+          language: app.language,
+        },
+      });
+      if (!entry) continue;
+      app.generatedImages.unshift(entry);
+      app.imageBatch.push(entry);
+      app.imageActive = entry;
+      generated += 1;
+      renderImageResult();
+      renderImageGallery();
+    } catch (error) {
+      const message = compactError(error);
+      if (app.imageAbort || /annul|cancel/i.test(message)) {
+        app.imageAbort = true;
+        break;
+      }
+      setImageError(message);
+      break;
+    }
+  }
+
+  app.imageBusy = false;
+  app.imageRequestId = null;
+  updateImageBusy();
+  if (app.imageAbort) {
+    showToast(t("imageStudio.cancelled"));
+  } else if (generated) {
+    showToast(
+      total > 1
+        ? t("imageStudio.batchTitle", { n: generated })
+        : t("imageStudio.saved")
+    );
+  }
+  app.imageAbort = false;
+  refreshImageStatus({ quiet: true });
+}
+
+function stopImageGeneration() {
+  if (!app.imageBusy) return;
+  app.imageAbort = true;
+  $("image-stop").disabled = true;
+  if (app.imageRequestId) {
+    invoke("stop_image_generation", {
+      requestId: app.imageRequestId,
+    }).catch(() => {});
+  }
+}
+
+async function renderImageResult() {
+  const entry = app.imageActive;
+  const box = $("image-result");
+  if (!entry) {
+    box.classList.add("hidden");
+    return;
+  }
+  box.classList.remove("hidden");
+  $("image-result-img").src = entry.dataUrl || entry.thumbnailUrl || "";
+  $("image-result-img").alt = entry.prompt || t("imageStudio.generated");
+  $("image-result-prompt").textContent =
+    entry.prompt || t("imageStudio.generated");
+
+  const seconds =
+    Number(entry.wallSeconds) > 0 ? Number(entry.wallSeconds).toFixed(1) : "—";
+  let meta = t("imageStudio.stats", {
+    width: entry.width,
+    height: entry.height,
+    seed: entry.seed,
+    steps: entry.steps,
+    seconds,
+  });
+  if (entry.peakMemoryMb != null) {
+    meta += t("imageStudio.peak", {
+      mb: Math.round(Number(entry.peakMemoryMb)),
+    });
+  }
+  if (entry.backend) meta += `\n${entry.backend}`;
+  $("image-result-meta").textContent = meta;
+
+  const download = $("image-download");
+  download.href = entry.dataUrl || entry.thumbnailUrl || "#";
+  download.download = `bonsai-${new Date(
+    entry.createdAt || Date.now()
+  )
+    .toISOString()
+    .replace(/[:.]/g, "-")}.png`;
+
+  const batch = $("image-batch");
+  batch.innerHTML = "";
+  batch.classList.toggle("hidden", app.imageBatch.length < 2);
+  for (const item of app.imageBatch) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.classList.toggle("active", item.id === entry.id);
+    button.title = item.prompt || t("imageStudio.generated");
+    const image = document.createElement("img");
+    image.src = item.thumbnailUrl || item.dataUrl || "";
+    image.alt = "";
+    button.appendChild(image);
+    button.addEventListener("click", () => {
+      app.imageActive = item;
+      renderImageResult();
+    });
+    batch.appendChild(button);
+  }
+
+  if (!entry.dataUrl) {
+    try {
+      const full = await invoke("get_generated_image", { id: entry.id });
+      Object.assign(entry, full);
+      if (app.imageActive?.id === entry.id) await renderImageResult();
+    } catch (error) {
+      setImageError(compactError(error));
+    }
+  }
+}
+
+async function selectGeneratedImage(id) {
+  const entry = app.generatedImages.find((item) => item.id === id);
+  if (!entry) return;
+  app.imageActive = entry;
+  app.imageBatch = [];
+  await renderImageResult();
+  $("image-result").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function reuseGeneratedImage() {
+  const entry = app.imageActive;
+  if (!entry) return;
+  $("image-prompt").value = entry.prompt || "";
+  $("image-seed").value = String(entry.seed ?? 0);
+  $("image-steps").value = String(entry.steps || 4);
+  $("image-guidance").value = String(entry.guidance ?? 1);
+  const resolution = IMAGE_RESOLUTIONS.find(
+    (item) => item.width === entry.width && item.height === entry.height
+  );
+  if (resolution) $("image-resolution").value = resolution.id;
+  if (entry.family) {
+    fillImageModelSelect();
+    $("image-model").value = entry.family;
+  }
+  app.imageMode = "single";
+  updateImageMode();
+  saveImageDefaults();
+  $("image-studio").scrollIntoView({ behavior: "smooth", block: "start" });
+  setTimeout(() => $("image-prompt").focus(), 120);
+}
+
+async function deleteActiveGeneratedImage() {
+  const entry = app.imageActive;
+  if (!entry) return;
+  try {
+    await invoke("delete_generated_image", { id: entry.id });
+    app.generatedImages = app.generatedImages.filter(
+      (item) => item.id !== entry.id
+    );
+    app.imageBatch = app.imageBatch.filter((item) => item.id !== entry.id);
+    app.imageActive = app.imageBatch[app.imageBatch.length - 1] || null;
+    await renderImageResult();
+    renderImageGallery();
+    showToast(t("imageStudio.deleted"));
+  } catch (error) {
+    setImageError(compactError(error));
+  }
+}
+
+async function clearGeneratedImages() {
+  if (!(app.generatedImages || []).length) return;
+  if (!window.confirm(t("imageStudio.clearConfirm"))) return;
+  try {
+    await invoke("clear_generated_images");
+    app.generatedImages = [];
+    app.imageBatch = [];
+    app.imageActive = null;
+    await renderImageResult();
+    renderImageGallery();
+    showToast(t("imageStudio.cleared"));
+  } catch (error) {
+    setImageError(compactError(error));
+  }
+}
+
+async function loadGeneratedImages() {
+  try {
+    const images = await invoke("list_generated_images");
+    app.generatedImages = Array.isArray(images) ? images : [];
+  } catch (error) {
+    console.warn("list_generated_images", error);
+    app.generatedImages = [];
+  }
+  if (app.view === "library") renderLibrary();
+}
+
+async function testImageConnection() {
+  const button = $("test-image-connection");
+  const result = $("image-test-result");
+  button.disabled = true;
+  result.className = "settings-hint";
+  result.textContent = t("settings.testing");
+  const baseUrl =
+    $("setting-image-url").value.trim() ||
+    app.settings.imageBaseUrl ||
+    "http://127.0.0.1:8000";
+  try {
+    const status = await invoke("image_status", { baseUrl });
+    app.imageStatus = status;
+    updateImageStatusUi();
+    fillImageModelSelect();
+    if (status.ok && status.healthy) {
+      result.className = "settings-hint";
+      result.textContent = t("settings.imageTestOk", {
+        kind: status.kind || "local",
+        family: prettyImageFamily(
+          status.defaultFamily || status.supportedFamilies?.[0]
+        ),
+      });
+    } else if (status.ok) {
+      result.textContent = t("settings.imageTestUnhealthy", {
+        reason: status.reason || "unknown",
+      });
+    } else {
+      result.textContent = t("settings.imageTestOffline", {
+        error: status.error || t("imageStudio.statusOffline"),
+      });
+    }
+  } catch (error) {
+    result.textContent = t("settings.imageTestOffline", {
+      error: compactError(error),
+    });
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function unloadImageModel() {
+  const button = $("image-status-unload");
+  const settingsButton = $("unload-image-connection");
+  const previous = button.textContent;
+  button.textContent = t("imageStudio.unloading");
+  button.disabled = true;
+  if (settingsButton) settingsButton.disabled = true;
+
+  try {
+    const result = await invoke("unload_image_model", {
+      baseUrl: app.settings.imageBaseUrl || "",
+      language: app.language,
+    });
+    const freed = Number(result?.freedMb || 0);
+    showToast(
+      freed > 0
+        ? t("imageStudio.unloaded", { mb: Math.round(freed) })
+        : t("imageStudio.unloadedNoop")
+    );
+    if ($("image-test-result")) {
+      $("image-test-result").textContent = t("imageStudio.statusUnloaded");
+    }
+  } catch (error) {
+    showToast(compactError(error), true);
+  } finally {
+    button.textContent = previous;
+    button.disabled = false;
+    if (settingsButton) settingsButton.disabled = false;
+    await refreshImageStatus({ quiet: true });
+  }
+}
+
 
 function openCanvas(title, language, code) {
   $("canvas-title").textContent = title || t("canvas.title");
@@ -4700,6 +5572,21 @@ function openSettings() {
     settings.opencodeWorkspace || settings.workspace || "";
   $("setting-opencode-agent").value = settings.opencodeAgent || "build";
   $("setting-opencode-auto").checked = settings.opencodeAuto !== false;
+  $("setting-image-url").value = settings.imageBaseUrl || "";
+  $("setting-image-bonsai-dir").value = settings.bonsaiDir || "";
+  $("setting-image-model").value = settings.imageModel || "bonsai-ternary";
+  $("setting-image-resolution").value = imageResolutionById(
+    settings.imageResolution
+  ).id;
+  $("setting-image-steps").value = String(settings.imageSteps || 4);
+  $("setting-image-guidance").value = String(
+    Number.isFinite(Number(settings.imageGuidance))
+      ? settings.imageGuidance
+      : 1
+  );
+  $("setting-image-batch").value = String(imageBatchSize());
+  $("setting-image-unload-quit").checked = settings.imageUnloadOnQuit !== false;
+  $("image-test-result").textContent = "";
   refreshAgentModelOptions();
   refreshOpenCodeStatus();
   updateToolPermissionsState();
@@ -4726,6 +5613,9 @@ function selectSettingsTab(name) {
         updateAgentBanner();
       });
     }
+  }
+  if (name === "images") {
+    refreshImageStatus({ quiet: true });
   }
 }
 
@@ -4953,6 +5843,13 @@ function deleteAllData() {
   app.settings.profileBehavior = "";
   app.settings.systemPrompt = "";
   app.settings.autoMemory = false;
+  app.generatedImages = [];
+  app.imageActive = null;
+  app.imageBatch = [];
+  invoke("clear_generated_images").catch((error) =>
+    console.warn("clear_generated_images", error)
+  );
+  renderImageResult();
   persistConversations(true);
   persistSettings();
   renderSidebar();
@@ -5036,6 +5933,26 @@ function settingsFromForm() {
     enableWebSearch: $("setting-web-search").checked,
     creationsEnabled: $("setting-creations").checked,
     visualizationsEnabled: $("setting-visualizations").checked,
+    imageBaseUrl:
+      $("setting-image-url").value.trim() || "http://127.0.0.1:8000",
+    bonsaiDir: $("setting-image-bonsai-dir").value.trim(),
+    imageModel: $("setting-image-model").value || "bonsai-ternary",
+    imageResolution:
+      $("setting-image-resolution").value ||
+      app.settings.imageResolution ||
+      "1x1-512",
+    imageSteps: Math.max(
+      1,
+      Math.min(50, Number.parseInt($("setting-image-steps").value, 10) || 4)
+    ),
+    imageGuidance: Number.isFinite(Number.parseFloat($("setting-image-guidance").value))
+      ? Math.max(0, Number.parseFloat($("setting-image-guidance").value))
+      : 1,
+    imageBatchSize: Math.max(
+      2,
+      Math.min(8, Number.parseInt($("setting-image-batch").value, 10) || 4)
+    ),
+    imageUnloadOnQuit: $("setting-image-unload-quit").checked,
     pastChatsAccess: $("setting-past-chats").value,
     projectFilesAccess: $("setting-project-files").value,
     opencodeBinary: $("setting-opencode-binary").value.trim() || "opencode",
@@ -5077,6 +5994,15 @@ async function saveSettingsFromForm(event) {
   updateAccountRow();
   renderMessages({ scrollToEnd: false });
   updateComposerState();
+  $("image-resolution").value = imageResolutionById(
+    next.imageResolution
+  ).id;
+  $("image-steps").value = String(next.imageSteps || 4);
+  $("image-guidance").value = String(
+    Number.isFinite(Number(next.imageGuidance)) ? next.imageGuidance : 1
+  );
+  fillImageModelSelect();
+  updateImageMode();
 
   try {
     await invoke("save_settings", { settings: app.settings });
@@ -5086,6 +6012,9 @@ async function saveSettingsFromForm(event) {
     refreshModels();
     refreshHealth({ quiet: true });
     refreshOpenCodeStatus();
+    if (app.view === "library" && app.libraryTab === "images") {
+      refreshImageStatus({ quiet: true });
+    }
   } catch (error) {
     showToast(compactError(error), true);
   }
@@ -5308,6 +6237,9 @@ function onGlobalKeydown(event) {
   } else if (key === ",") {
     event.preventDefault();
     openSettings();
+  } else if (key === "q") {
+    event.preventDefault();
+    invoke("quit_app").catch((error) => showToast(compactError(error), true));
   }
 }
 

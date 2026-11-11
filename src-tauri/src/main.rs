@@ -2,6 +2,7 @@
 
 mod api;
 mod attachments;
+mod images;
 mod install;
 mod opencode;
 mod store;
@@ -22,6 +23,7 @@ pub struct AppState {
     pub store: Store,
     pub client: reqwest::Client,
     pub cancels: Mutex<HashMap<String, CancellationToken>>,
+    pub image_cancels: Mutex<HashMap<String, CancellationToken>>,
     pub permissions: Mutex<HashMap<String, tokio::sync::oneshot::Sender<String>>>,
     pub auto_approve: Mutex<HashSet<String>>,
     pub quitting: AtomicBool,
@@ -70,11 +72,12 @@ fn main() {
         .build()
         .expect("failed to build HTTP client");
 
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(AppState {
             store: Store::new(data_dir),
             client,
             cancels: Mutex::new(HashMap::new()),
+            image_cancels: Mutex::new(HashMap::new()),
             permissions: Mutex::new(HashMap::new()),
             auto_approve: Mutex::new(HashSet::new()),
             quitting: AtomicBool::new(false),
@@ -127,6 +130,7 @@ fn main() {
             api::resolve_tool_permission,
             api::start_tamer,
             api::open_external,
+            api::quit_app,
             install::tamer_status,
             install::install_tamer,
             install::start_auth_browser,
@@ -137,7 +141,21 @@ fn main() {
             opencode::list_opencode_models,
             opencode::start_agent,
             attachments::process_attachment,
+            images::image_status,
+            images::generate_image,
+            images::stop_image_generation,
+            images::unload_image_model,
+            images::list_generated_images,
+            images::get_generated_image,
+            images::delete_generated_image,
+            images::clear_generated_images,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Model Desk");
+        .build(tauri::generate_context!())
+        .expect("error while building Model Desk");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            images::unload_on_exit(app_handle);
+        }
+    });
 }

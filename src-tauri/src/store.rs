@@ -125,6 +125,14 @@ pub struct Settings {
     pub project_files_access: String,
     pub creations_enabled: bool,
     pub visualizations_enabled: bool,
+    pub image_base_url: String,
+    pub bonsai_dir: String,
+    pub image_model: String,
+    pub image_steps: u32,
+    pub image_guidance: f64,
+    pub image_resolution: String,
+    pub image_batch_size: u32,
+    pub image_unload_on_quit: bool,
     pub providers: Vec<Provider>,
     pub active_provider: String,
     pub opencode_binary: String,
@@ -211,6 +219,14 @@ impl Default for Settings {
             project_files_access: "current".into(),
             creations_enabled: true,
             visualizations_enabled: true,
+            image_base_url: "http://127.0.0.1:8000".into(),
+            bonsai_dir: default_bonsai_dir().to_string_lossy().to_string(),
+            image_model: "bonsai-ternary".into(),
+            image_steps: 4,
+            image_guidance: 1.0,
+            image_resolution: "1x1-512".into(),
+            image_batch_size: 4,
+            image_unload_on_quit: true,
             providers,
             active_provider: "lumo".into(),
             opencode_binary: "opencode".into(),
@@ -395,6 +411,29 @@ impl Settings {
                     "lumo-tamer/lumo".into()
                 };
         }
+        if self.image_base_url.trim().is_empty() {
+            self.image_base_url = "http://127.0.0.1:8000".into();
+        } else {
+            self.image_base_url = self.image_base_url.trim().trim_end_matches('/').to_string();
+        }
+        if self.bonsai_dir.trim().is_empty() {
+            self.bonsai_dir = default_bonsai_dir().to_string_lossy().to_string();
+        }
+        if self.image_model.trim().is_empty() {
+            self.image_model = "bonsai-ternary".into();
+        }
+        if self.image_steps == 0 {
+            self.image_steps = 4;
+        }
+        if self.image_guidance < 0.0 {
+            self.image_guidance = 1.0;
+        }
+        if self.image_resolution.trim().is_empty() {
+            self.image_resolution = "1x1-512".into();
+        }
+        if self.image_batch_size == 0 {
+            self.image_batch_size = 4;
+        }
     }
 }
 
@@ -502,6 +541,19 @@ fn default_tamer_dir() -> PathBuf {
             current
         }
     }
+}
+
+fn default_bonsai_dir() -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    let candidates = [
+        home.join("Bonsai-Image-Demo"),
+        home.join("Projects/Bonsai-Image-Demo"),
+        home.join("Projects/bonsai-image-demo"),
+    ];
+    candidates
+        .into_iter()
+        .find(|path| path.join("scripts/serve.sh").exists())
+        .unwrap_or_else(|| home.join("Bonsai-Image-Demo"))
 }
 
 pub fn system_language() -> &'static str {

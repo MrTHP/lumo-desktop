@@ -1,0 +1,127 @@
+diff --git a/scripts/local_backend.py b/scripts/local_backend.py
+index 611622e..1d25480 100644
+--- a/scripts/local_backend.py
++++ b/scripts/local_backend.py
+@@ -55,6 +55,8 @@ os.environ.setdefault("TRITON_CACHE_DIR", str(TRITON_CACHE_DIR))
+ # backend_gpu.server's lifespan refuses to start if MFLUX_STUDIO_GPU_TOKEN is
+ # unset. Populate a sentinel; auth is bypassed via dependency override below.
+ os.environ.setdefault("MFLUX_STUDIO_GPU_TOKEN", "local-demo-unused")
++# Reduce allocator fragmentation across unload/reload cycles on 8 GB cards.
++os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+ 
+ from backend_gpu import server as _gpu_server  # noqa: E402
+ from backend_gpu import pipeline_gpu as _pipeline_gpu  # noqa: E402
+@@ -66,6 +68,113 @@ app = _gpu_server.app
+ app.dependency_overrides[_gpu_server._verify_bearer] = lambda: None
+ 
+ 
++# ── Manual model unload / memory reporting ───────────────────────────────
++# Model Desk exposes an "Unload model" button and unloads Bonsai when the
++# desktop app quits. Upstream image-studio has no such endpoint, so the local
++# Linux shim adds one. Unloading drops the GPU-resident components and
++# empties the CUDA cache; the next /generate transparently reloads them.
++_ORIGINAL_ENSURE_BACKEND = _pipeline_gpu.GpuPipeline.ensure_backend
++
++
++def _ensure_backend_with_reload(self, *, backend, model_path=None):
++    if getattr(self, "_bonsai_unloaded", False):
++        self._bonsai_unloaded = False
++        self._backend = _pipeline_gpu._normalize_gpu_backend(backend)
++        try:
++            import torch
++
++            if torch.cuda.is_available():
++                torch.cuda.empty_cache()
++        except Exception:
++            pass
++        self.prewarm()
++        return
++    return _ORIGINAL_ENSURE_BACKEND(self, backend=backend, model_path=model_path)
++
++
++_pipeline_gpu.GpuPipeline.ensure_backend = _ensure_backend_with_reload
++
++
++def _cuda_memory_mb():
++    try:
++        import torch
++
++        if not torch.cuda.is_available():
++            return None, None
++        return (
++            torch.cuda.memory_allocated() / (1024**2),
++            torch.cuda.memory_reserved() / (1024**2),
++        )
++    except Exception:
++        return None, None
++
++
++@app.get("/memory")
++def _memory() -> dict:
++    pipeline = app.state.pipeline
++    loaded = bool(getattr(pipeline, "_ready", False)) and not getattr(
++        pipeline, "_bonsai_unloaded", False
++    )
++    allocated, reserved = _cuda_memory_mb()
++    return {
++        "ok": True,
++        "loaded": loaded,
++        "backend": pipeline.backend,
++        "allocatedMb": allocated,
++        "reservedMb": reserved,
++    }
++
++
++@app.post("/unload")
++def _unload() -> dict:
++    import gc
++
++    pipeline = app.state.pipeline
++    allocated, reserved = _cuda_memory_mb()
++    if getattr(pipeline, "_bonsai_unloaded", False):
++        return {
++            "ok": True,
++            "already": True,
++            "freedMb": 0.0,
++            "allocatedMb": allocated,
++            "reservedMb": reserved,
++        }
++
++    before = allocated
++    pipeline._transformer = None
++    pipeline._text_encoder = None
++    pipeline._vae = None
++    pipeline._scheduler = None
++    pipeline._ready = False
++    pipeline._bonsai_unloaded = True
++    gc.collect()
++    try:
++        import torch
++
++        if torch.cuda.is_available():
++            torch.cuda.empty_cache()
++            torch.cuda.ipc_collect()
++    except Exception:
++        pass
++
++    after, reserved = _cuda_memory_mb()
++    freed = 0.0
++    if before is not None and after is not None:
++        freed = max(0.0, before - after)
++    log.info(
++        "unloaded Bonsai model: before=%s MB after=%s MB freed=%s MB",
++        before, after, freed,
++    )
++    return {
++        "ok": True,
++        "already": False,
++        "freedMb": freed,
++        "allocatedMb": after,
++        "reservedMb": reserved,
++    }
++
++
++
+ # ── /backends shim ───────────────────────────────────────────────────────
+ # `backend_gpu/server.py` doesn't expose /backends — the upstream design
+ # expects the Mac `backend/` router to own that endpoint. On Linux there is

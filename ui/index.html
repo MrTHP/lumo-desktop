@@ -259,10 +259,10 @@
               <span class="menu-switch" id="tool-visualizations-state"></span>
             </button>
             <div class="tools-menu-separator"></div>
-            <button type="button" class="tools-menu-item disabled" id="tool-create-image">
+            <button type="button" class="tools-menu-item" id="tool-create-image">
               <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 15-5-5L5 20"/></svg>
               <span data-i18n="tools.createImage">Créer une image</span>
-              <span class="menu-badge" data-i18n="tools.unsupported">indisponible</span>
+              <span class="menu-badge" data-i18n="tools.bonsai">Bonsai</span>
             </button>
             <button type="button" class="tools-menu-item disabled">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
@@ -331,12 +331,95 @@
           <button id="library-tab-creations" class="library-tab active" data-i18n="pages.creations">Créations</button>
           <button id="library-tab-images" class="library-tab" data-i18n="pages.images">Images</button>
         </div>
+
+        <section id="image-studio" class="image-studio hidden">
+          <div class="image-studio-head">
+            <div>
+              <h2 data-i18n="imageStudio.title">Studio d'images · Bonsai</h2>
+              <p data-i18n="imageStudio.subtitle">Génération locale avec Bonsai Image (backend PrismML), sans quitter Model Desk.</p>
+            </div>
+            <div class="image-studio-status">
+              <span id="image-status-dot" class="image-status-dot"></span>
+              <span id="image-status-label" class="image-status-label" data-i18n="imageStudio.statusChecking">Vérification…</span>
+              <button type="button" id="image-status-unload" class="btn-ghost small hidden" data-i18n="imageStudio.unload">Décharger le modèle</button>
+              <button type="button" id="image-status-refresh" class="btn-ghost small" data-i18n="imageStudio.refresh">Actualiser</button>
+              <button type="button" id="image-status-configure" class="btn-ghost small" data-i18n="imageStudio.configure">Configurer</button>
+            </div>
+          </div>
+
+          <form id="image-form" class="image-form">
+            <textarea id="image-prompt" rows="3" data-i18n-placeholder="imageStudio.promptPlaceholder" placeholder="Décrivez votre image…"></textarea>
+            <div id="image-samples" class="image-samples"></div>
+            <div class="image-controls">
+              <label class="image-control">
+                <span data-i18n="imageStudio.model">Modèle</span>
+                <select id="image-model"></select>
+              </label>
+              <label class="image-control">
+                <span data-i18n="imageStudio.resolution">Résolution</span>
+                <select id="image-resolution"></select>
+              </label>
+              <label class="image-control">
+                <span data-i18n="imageStudio.seed">Seed</span>
+                <span class="image-seed-row">
+                  <input id="image-seed" type="number" min="0" step="1">
+                  <button type="button" id="image-seed-random" class="icon-btn" data-i18n-title="imageStudio.randomSeed" data-i18n-aria-label="imageStudio.randomSeed" title="Seed aléatoire" aria-label="Seed aléatoire">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="8.5" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="8.5" cy="15.5" r="1" fill="currentColor" stroke="none"/><circle cx="15.5" cy="15.5" r="1" fill="currentColor" stroke="none"/></svg>
+                  </button>
+                </span>
+              </label>
+              <label class="image-control image-control-narrow">
+                <span data-i18n="imageStudio.steps">Étapes</span>
+                <input id="image-steps" type="number" min="1" max="50" step="1">
+              </label>
+              <label class="image-control image-control-narrow">
+                <span data-i18n="imageStudio.guidance">Guidage</span>
+                <input id="image-guidance" type="number" min="0" max="20" step="0.1">
+              </label>
+              <div class="image-control">
+                <span data-i18n="imageStudio.mode">Mode</span>
+                <div class="image-mode" role="group" aria-label="Mode">
+                  <button type="button" data-image-mode="single" class="active" data-i18n="imageStudio.single">Unique</button>
+                  <button type="button" data-image-mode="batch" data-i18n="imageStudio.batch">Lot de 4</button>
+                </div>
+              </div>
+              <div class="image-actions">
+                <button type="submit" id="image-generate" class="btn-primary">
+                  <svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>
+                  <span id="image-generate-label" data-i18n="imageStudio.generate">Générer</span>
+                </button>
+                <button type="button" id="image-stop" class="btn-ghost hidden" data-i18n="imageStudio.stop">Arrêter</button>
+              </div>
+            </div>
+            <div id="image-error" class="image-error hidden" role="alert"></div>
+          </form>
+
+          <div id="image-result" class="image-result hidden">
+            <div class="image-result-main">
+              <img id="image-result-img" alt="">
+              <div id="image-batch" class="image-batch hidden"></div>
+            </div>
+            <div class="image-result-side">
+              <p id="image-result-prompt" class="image-result-prompt"></p>
+              <div id="image-result-meta" class="image-result-meta"></div>
+              <div class="image-result-actions">
+                <a id="image-download" class="btn-primary" download>
+                  <svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 21h14"/></svg>
+                  <span data-i18n="imageStudio.download">Télécharger</span>
+                </a>
+                <button type="button" id="image-reuse" class="btn-ghost" data-i18n="imageStudio.reuse">Réutiliser</button>
+                <button type="button" id="image-delete" class="btn-danger" data-i18n="imageStudio.delete">Supprimer</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="studio-gallery-head">
+            <h2 data-i18n="imageStudio.gallery">Galerie</h2>
+            <button type="button" id="image-clear" class="btn-ghost small" data-i18n="imageStudio.clear">Tout effacer</button>
+          </div>
+        </section>
+
         <div id="library-content" class="library-content"></div>
-        <div class="library-create">
-          <input id="library-prompt" type="text" data-i18n-placeholder="pages.imagePrompt" placeholder="Décrivez votre image…">
-          <button id="library-create-image" class="btn-primary" data-i18n="pages.createImage">Créer</button>
-          <span class="library-note" data-i18n="pages.imageUnsupported">La génération d'images native n'est pas exposée par lumo-tamer.</span>
-        </div>
       </section>
     </main>
   </div>
@@ -368,6 +451,7 @@
         <button type="button" class="settings-tab" data-settings-tab="general" data-i18n="settings.tab.general">Général</button>
         <button type="button" class="settings-tab" data-settings-tab="tools" data-i18n="settings.tab.tools">Outils</button>
         <button type="button" class="settings-tab" data-settings-tab="agent" data-i18n="settings.tab.agent">Agent</button>
+        <button type="button" class="settings-tab" data-settings-tab="images" data-i18n="settings.tab.images">Images</button>
       </div>
 
       <div class="settings-pane" data-settings-pane="connection">
@@ -655,6 +739,72 @@
             L'auto-approbation donne à l'agent les mêmes droits que ton compte utilisateur. Désactive-la si tu veux valider chaque action dans OpenCode.
           </p>
           <div id="opencode-status" class="settings-hint"></div>
+        </section>
+      </div>
+
+      <div class="settings-pane hidden" data-settings-pane="images">
+        <section class="settings-section">
+          <div class="settings-section-head">
+            <h3 data-i18n="settings.imageSection">Bonsai Image (local)</h3>
+            <span class="badge" data-i18n="settings.localBadge">local</span>
+          </div>
+          <p class="settings-hint" data-i18n="settings.imageHint">
+            Model Desk se connecte au backend du Bonsai Image Demo (PrismML). Le serveur garde les poids du modèle en mémoire et expose /generate sur le port 8000.
+          </p>
+          <div class="field">
+            <label for="setting-image-url" data-i18n="settings.imageUrl">URL du backend Bonsai</label>
+            <input id="setting-image-url" type="url" placeholder="http://127.0.0.1:8000">
+            <small data-i18n="settings.imageUrlHint">Adresse du serveur FastAPI lancé par `./scripts/serve.sh` dans Bonsai-Image-Demo.</small>
+          </div>
+          <div class="field">
+            <label for="setting-image-bonsai-dir" data-i18n="settings.imageDir">Dossier Bonsai-Image-Demo</label>
+            <input id="setting-image-bonsai-dir" type="text" placeholder="/home/moi/Bonsai-Image-Demo">
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="setting-image-model" data-i18n="settings.imageModel">Variante par défaut</label>
+              <select id="setting-image-model">
+                <option value="bonsai-ternary">Bonsai · Ternary</option>
+                <option value="bonsai-binary">Bonsai · Binary</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="setting-image-resolution" data-i18n="settings.imageResolution">Résolution par défaut</label>
+              <select id="setting-image-resolution"></select>
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="setting-image-steps" data-i18n="settings.imageSteps">Étapes par défaut</label>
+              <input id="setting-image-steps" type="number" min="1" max="50" step="1">
+            </div>
+            <div class="field">
+              <label for="setting-image-guidance" data-i18n="settings.imageGuidance">Guidage par défaut</label>
+              <input id="setting-image-guidance" type="number" min="0" max="20" step="0.1">
+            </div>
+            <div class="field">
+              <label for="setting-image-batch" data-i18n="settings.imageBatch">Taille du lot</label>
+              <input id="setting-image-batch" type="number" min="1" max="8" step="1">
+            </div>
+          </div>
+          <div class="input-with-button">
+            <button type="button" id="test-image-connection" class="btn-ghost" data-i18n="settings.imageTest">Tester le backend</button>
+            <button type="button" id="unload-image-connection" class="btn-ghost" data-i18n="settings.imageUnload">Décharger le modèle</button>
+            <span id="image-test-result" class="settings-hint"></span>
+          </div>
+          <label class="check-row">
+            <input type="checkbox" id="setting-image-unload-quit" checked>
+            <span data-i18n="settings.imageUnloadOnQuit">Décharger le modèle Bonsai de la mémoire GPU quand Model Desk quitte</span>
+          </label>
+          <pre class="settings-command">cd ~/Bonsai-Image-Demo
+./setup.sh
+./scripts/serve.sh</pre>
+          <p class="settings-hint" data-i18n="settings.imageCommandHint">
+            Le premier lancement télécharge les poids et prépare les kernels GPU (plusieurs minutes). Garde `serve.sh` ouvert pendant que tu génères des images.
+          </p>
+          <p class="settings-hint" data-i18n="settings.imageCredit">
+            Bonsai Image Demo est un projet PrismML (licence Apache-2.0). Model Desk fournit seulement l'interface et se connecte à ton serveur local.
+          </p>
         </section>
       </div>
 
