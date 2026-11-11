@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Lumo Desktop",
-  "version": "0.2.0",
-  "identifier": "me.mrthp.lumodesktop",
+  "productName": "Model Desk",
+  "version": "0.3.0",
+  "identifier": "me.mrthp.modeldesk",
   "build": {
     "frontendDist": "../ui"
   },
@@ -11,7 +11,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Lumo Desktop",
+        "title": "Model Desk",
         "width": 1180,
         "height": 820,
         "minWidth": 860,

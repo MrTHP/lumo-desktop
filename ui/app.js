@@ -1,7 +1,7 @@
 "use strict";
 
 /* --------------------------------------------------------------------------
- * Lumo Desktop — frontend
+ * Model Desk — frontend
  * Tauri backend owns HTTP streaming, config and persistence.
  * ----------------------------------------------------------------------- */
 
@@ -80,7 +80,7 @@ let settingsSaved = false;
 if (!invoke) {
   document.body.innerHTML =
     '<div style="padding:40px;font-family:system-ui;color:#eee;background:#111;height:100vh">' +
-    "<h1>Lumo Desktop</h1><p>Cette interface doit être lancée dans l'application Tauri.</p></div>";
+    "<h1>Model Desk</h1><p>Cette interface doit être lancée dans l'application Tauri.</p></div>";
   throw new Error("Tauri API unavailable");
 }
 
@@ -5460,6 +5460,6 @@ boot().catch((error) => {
   const panel = document.createElement("pre");
   panel.style.cssText =
     "position:fixed;inset:24px;z-index:99999;overflow:auto;padding:20px;background:#1b1b1f;color:#ffb4b4;font:12px/1.5 monospace;white-space:pre-wrap;border:1px solid #7f1d1d;border-radius:12px";
-  panel.textContent = `Lumo Desktop — erreur au démarrage\n\n${error?.stack || error}`;
+  panel.textContent = `Model Desk — erreur au démarrage\n\n${error?.stack || error}`;
   document.body.appendChild(panel);
 });

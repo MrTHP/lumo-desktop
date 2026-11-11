@@ -574,6 +574,35 @@ pre {
   text-align: center;
 }
 
+.pipeline-multi {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pipeline-core {
+  margin: 0 auto;
+}
+
+.pipeline-down {
+  color: var(--accent-2);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.pipeline-providers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pipeline-providers .pipeline-node {
+  min-width: 190px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
 /* ---------- Privacy ---------- */
 
 .privacy-grid {

@@ -1,12 +1,12 @@
 <div align="center">
-  <img src="docs/icon.png" width="96" alt="Lumo Desktop" />
-  <h1>Lumo Desktop</h1>
-  <p><strong>Un client desktop local-first pour Proton Lumo.</strong><br />
-  <em>A local-first desktop client for Proton Lumo.</em></p>
+  <img src="docs/icon.png" width="96" alt="Model Desk" />
+  <h1>Model Desk</h1>
+  <p><strong>Un espace IA local-first, multi-fournisseurs.</strong><br />
+  <em>A local-first, multi-provider AI workspace.</em></p>
   <p>
-    <a href="https://github.com/MrTHP/lumo-desktop/releases/latest/download/Lumo-Desktop_0.2.0_amd64.AppImage"><img src="https://img.shields.io/badge/Download-AppImage-8b5cf6?style=for-the-badge&logo=linux&logoColor=white" alt="Download AppImage" /></a>
-    <a href="https://mrthp.github.io/lumo-desktop/"><img src="https://img.shields.io/badge/Demo-GitHub%20Pages-2dd4bf?style=for-the-badge&logo=githubpages&logoColor=white" alt="Demo" /></a>
-    <a href="https://github.com/MrTHP/lumo-desktop"><img src="https://img.shields.io/badge/Source-GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
+    <a href="https://github.com/MrTHP/model-desk/releases/latest/download/Model-Desk_0.3.0_amd64.AppImage"><img src="https://img.shields.io/badge/Download-AppImage-8b5cf6?style=for-the-badge&logo=linux&logoColor=white" alt="Download AppImage" /></a>
+    <a href="https://mrthp.github.io/model-desk/"><img src="https://img.shields.io/badge/Demo-GitHub%20Pages-2dd4bf?style=for-the-badge&logo=githubpages&logoColor=white" alt="Demo" /></a>
+    <a href="https://github.com/MrTHP/model-desk"><img src="https://img.shields.io/badge/Source-GitHub-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub" /></a>
   </p>
   <p>
     <img src="https://img.shields.io/badge/Rust-1.77%2B-orange?logo=rust" alt="Rust" />
@@ -15,19 +15,21 @@
     <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT" />
   </p>
   <p><a href="#-français">🇫🇷 Français</a> · <a href="#-english">🇬🇧 English</a></p>
-  <p><strong>Démo en ligne / Live demo :</strong> <a href="https://mrthp.github.io/lumo-desktop/">mrthp.github.io/lumo-desktop</a> · <strong>Releases :</strong> <a href="https://github.com/MrTHP/lumo-desktop/releases">v0.2.0</a></p>
-  <img src="docs/screenshots/chat.png" width="100%" alt="Lumo Desktop" />
+  <p><strong>Démo en ligne / Live demo :</strong> <a href="https://mrthp.github.io/model-desk/">mrthp.github.io/model-desk</a> · <strong>Releases :</strong> <a href="https://github.com/MrTHP/model-desk/releases">v0.3.0</a></p>
+  <img src="docs/screenshots/chat.png" width="100%" alt="Model Desk" />
 </div>
 
-> **Unofficial project.** Lumo Desktop is not affiliated with Proton AG. It talks to your own local [`lumo-tamer`](https://github.com/ZeroTricks/lumo-tamer) instance, which uses Proton Lumo's unofficial API.
+> **Unofficial project.** Model Desk is not affiliated with Proton AG. **Lumo** is a trademark of Proton AG. Model Desk talks to your own local [`lumo-tamer`](https://github.com/ZeroTricks/lumo-tamer) instance, which uses Proton Lumo's unofficial API.
 
 ---
 
 ## 🇫🇷 Français
 
-**Lumo Desktop** est un client de chat desktop multi-fournisseurs construit avec **Rust** et **Tauri v2**. Il se connecte à ton instance locale `lumo-tamer`, à l'**API DeepSeek**, ou à tout endpoint OpenAI-compatible, et peut aussi lancer l'**agent OpenCode** dans un dossier projet. L'interface transforme ces API en une vraie application de bureau : streaming, historique local, projets, mémoire, pièces jointes, outils fichiers et recherche web.
+**Model Desk** est un client de chat desktop multi-fournisseurs construit avec **Rust** et **Tauri v2**. Il se connecte à ton instance locale `lumo-tamer`, à l'**API DeepSeek**, ou à tout endpoint OpenAI-compatible, et peut aussi lancer l'**agent OpenCode** dans un dossier projet. L'interface transforme ces API en une vraie application de bureau : streaming, historique local, projets, mémoire, pièces jointes, outils fichiers et recherche web.
 
-L'interface suit la langue du système (français ou anglais), les conversations restent dans `~/.config/lumo-desktop`, et l'application peut installer `lumo-tamer` puis ouvrir la fenêtre de connexion Proton pour toi.
+> **Projet non officiel.** Model Desk n'est pas affilié à Proton AG. **Lumo** est une marque de Proton AG.
+
+L'interface suit la langue du système (français ou anglais), les conversations restent dans `~/.config/model-desk`, et l'application peut installer `lumo-tamer` puis ouvrir la fenêtre de connexion Proton pour toi.
 
 ### ✨ Fonctionnalités
 
@@ -46,25 +48,21 @@ L'interface suit la langue du système (français ou anglais), les conversations
 
 ### 📸 Aperçu
 
-| Chat, raisonnement et code | Canvas et aperçus HTML |
+| Chat multi-fournisseurs | Agent OpenCode |
 | --- | --- |
-| ![Chat](docs/screenshots/chat.png) | ![Canvas](docs/screenshots/landing.png) |
+| ![Chat](docs/screenshots/chat-hero.png) | ![Agent OpenCode](docs/screenshots/agent.png) |
 
-| Pièces jointes et OCR | Projets |
+| Réglages fournisseurs | Réglages agent |
 | --- | --- |
-| ![Attachments](docs/screenshots/attachments.png) | ![Projects](docs/screenshots/projects.png) |
-
-| Bibliothèque d'images | Mémoire locale |
-| --- | --- |
-| ![Library](docs/screenshots/library-images.png) | ![Memory](docs/screenshots/memory.png) |
+| ![Providers](docs/screenshots/providers.png) | ![Agent settings](docs/screenshots/agent-settings.png) |
 
 ### 🚀 Installation
 
-Télécharge l'**AppImage** ou le paquet **.deb** depuis la page [Releases](https://github.com/MrTHP/lumo-desktop/releases/latest).
+Télécharge l'**AppImage** ou le paquet **.deb** depuis la page [Releases](https://github.com/MrTHP/model-desk/releases/latest).
 
 ```sh
-chmod +x Lumo-Desktop_0.2.0_amd64.AppImage
-./Lumo-Desktop_0.2.0_amd64.AppImage
+chmod +x Model-Desk_0.3.0_amd64.AppImage
+./Model-Desk_0.3.0_amd64.AppImage
 ```
 
 Au premier lancement, si `lumo-tamer` n'est pas joignable, l'assistant propose de l'installer :
@@ -127,7 +125,7 @@ Les conversations, projets, souvenirs et réglages restent locaux. Les fichiers 
 ### ⚠️ Limites
 
 - **Génération d'images native** et **Custom Lumos** ne sont pas exposés par `lumo-tamer`.
-- Les **projets et la mémoire Proton** ne sont pas synchronisés : Lumo Desktop propose des équivalents locaux.
+- Les **projets et la mémoire Proton** ne sont pas synchronisés : Model Desk propose des équivalents locaux.
 - La **recherche web** est un réglage global de `lumo-tamer` (redémarre le service).
 - Les images ne sont pas envoyées telles quelles : le client envoie le texte OCR.
 - **OpenCode** doit être installé et configuré séparément. Le mode agent transmet les permissions à OpenCode ; l'auto-approbation donne à l'agent les droits de ton compte utilisateur.
@@ -142,9 +140,9 @@ MIT — voir [LICENSE](LICENSE).
 
 ## 🇬🇧 English
 
-**Lumo Desktop** is a multi-provider desktop chat client built with **Rust** and **Tauri v2**. It connects to your local `lumo-tamer` instance, the **DeepSeek API**, or any OpenAI-compatible endpoint, and can also run the **OpenCode agent** inside a project folder. It turns those APIs into a real desktop app: streaming, local history, projects, memory, attachments, file tools and web search.
+**Model Desk** is a multi-provider desktop chat client built with **Rust** and **Tauri v2**. It connects to your local `lumo-tamer` instance, the **DeepSeek API**, or any OpenAI-compatible endpoint, and can also run the **OpenCode agent** inside a project folder. It turns those APIs into a real desktop app: streaming, local history, projects, memory, attachments, file tools and web search.
 
-The UI follows your system language (French or English), conversations stay in `~/.config/lumo-desktop`, and the app can install `lumo-tamer` and open the Proton login window for you.
+The UI follows your system language (French or English), conversations stay in `~/.config/model-desk`, and the app can install `lumo-tamer` and open the Proton login window for you.
 
 ### ✨ Features
 
@@ -163,25 +161,21 @@ The UI follows your system language (French or English), conversations stay in `
 
 ### 📸 Screenshots
 
-| Chat, reasoning and code | Canvas and HTML previews |
+| Multi-provider chat | OpenCode agent |
 | --- | --- |
-| ![Chat](docs/screenshots/chat.png) | ![Canvas](docs/screenshots/landing.png) |
+| ![Chat](docs/screenshots/chat-hero.png) | ![OpenCode agent](docs/screenshots/agent.png) |
 
-| Attachments and OCR | Projects |
+| Provider settings | Agent settings |
 | --- | --- |
-| ![Attachments](docs/screenshots/attachments.png) | ![Projects](docs/screenshots/projects.png) |
-
-| Image library | Local memory |
-| --- | --- |
-| ![Library](docs/screenshots/library-images.png) | ![Memory](docs/screenshots/memory.png) |
+| ![Providers](docs/screenshots/providers.png) | ![Agent settings](docs/screenshots/agent-settings.png) |
 
 ### 🚀 Install
 
-Download the **AppImage** or **.deb** from the [Releases](https://github.com/MrTHP/lumo-desktop/releases/latest) page.
+Download the **AppImage** or **.deb** from the [Releases](https://github.com/MrTHP/model-desk/releases/latest) page.
 
 ```sh
-chmod +x Lumo-Desktop_0.2.0_amd64.AppImage
-./Lumo-Desktop_0.2.0_amd64.AppImage
+chmod +x Model-Desk_0.3.0_amd64.AppImage
+./Model-Desk_0.3.0_amd64.AppImage
 ```
 
 On first launch, if `lumo-tamer` is unreachable, the assistant offers to install it:
@@ -244,7 +238,7 @@ Conversations, projects, memories and settings stay local. Files are read locall
 ### ⚠️ Limitations
 
 - **Native image generation** and **Custom Lumos** are not exposed by `lumo-tamer`.
-- **Proton projects and memory** are not synced; Lumo Desktop provides local equivalents.
+- **Proton projects and memory** are not synced; Model Desk provides local equivalents.
 - **Web search** is a global `lumo-tamer` setting (it restarts the service).
 - Images are not sent as-is: the client sends OCR text.
 - **OpenCode** must be installed and configured separately. The agent mode delegates permissions to OpenCode; auto-approval gives the agent the rights of your user account.

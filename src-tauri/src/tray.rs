@@ -5,7 +5,7 @@ use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 
-pub const TRAY_ID: &str = "lumo-tray";
+pub const TRAY_ID: &str = "model-desk-tray";
 
 struct Labels {
     toggle: &'static str,
@@ -20,14 +20,14 @@ fn labels(lang: &str) -> Labels {
             toggle: "Afficher / Masquer",
             new_chat: "Nouvelle conversation",
             quit: "Quitter",
-            tooltip: "Lumo Desktop",
+            tooltip: "Model Desk",
         }
     } else {
         Labels {
             toggle: "Show / Hide",
             new_chat: "New chat",
             quit: "Quit",
-            tooltip: "Lumo Desktop",
+            tooltip: "Model Desk",
         }
     }
 }

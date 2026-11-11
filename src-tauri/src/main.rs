@@ -9,7 +9,8 @@ mod tools;
 mod tray;
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -26,10 +27,43 @@ pub struct AppState {
     pub quitting: AtomicBool,
 }
 
+fn migrate_legacy_config(config_root: &Path, data_dir: &Path) {
+    let legacy = config_root.join("lumo-desktop");
+    if !legacy.is_dir() || data_dir.exists() {
+        return;
+    }
+
+    if fs::rename(&legacy, data_dir).is_ok() {
+        return;
+    }
+
+    if fs::create_dir_all(data_dir).is_err() {
+        return;
+    }
+
+    if let Ok(entries) = fs::read_dir(&legacy) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                let _ = fs::copy(&path, data_dir.join(entry.file_name()));
+            }
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(
+            data_dir.join("settings.json"),
+            fs::Permissions::from_mode(0o600),
+        );
+    }
+}
+
 fn main() {
-    let data_dir = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("lumo-desktop");
+    let config_root = dirs::config_dir().unwrap_or_else(|| PathBuf::from("."));
+    let data_dir = config_root.join("model-desk");
+    migrate_legacy_config(&config_root, &data_dir);
 
     let client = reqwest::Client::builder()
         .connect_timeout(Duration::from_secs(10))
@@ -105,5 +139,5 @@ fn main() {
             attachments::process_attachment,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Lumo Desktop");
+        .expect("error while running Model Desk");
 }

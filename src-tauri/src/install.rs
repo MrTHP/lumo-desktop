@@ -54,9 +54,16 @@ fn default_install_directory() -> PathBuf {
     if compose_file(&projects).is_some() {
         projects
     } else {
-        dirs::data_local_dir()
-            .unwrap_or_else(|| home.join(".local/share"))
-            .join("lumo-desktop/lumo-tamer")
+        let data_root = dirs::data_local_dir().unwrap_or_else(|| home.join(".local/share"));
+        let current = data_root.join("model-desk/lumo-tamer");
+        let legacy = data_root.join("lumo-desktop/lumo-tamer");
+        if current.exists() {
+            current
+        } else if legacy.exists() {
+            legacy
+        } else {
+            current
+        }
     }
 }
 

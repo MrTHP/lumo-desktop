@@ -1,6 +1,6 @@
 {
   "identifier": "default",
-  "description": "Permissions for the Lumo Desktop main window",
+  "description": "Permissions for the Model Desk main window",
   "windows": ["main"],
   "permissions": ["core:default"]
 }
