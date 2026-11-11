@@ -2446,6 +2446,23 @@ async function newChat() {
 
 async function newAgentChat() {
   if (app.streaming) await stopGeneration();
+
+  const current = activeConversation();
+  if (current?.mode === "agent") {
+    showPage("chat");
+    updateAgentBanner();
+    updateComposerState();
+    $("input").focus();
+    return;
+  }
+  const existing = app.conversations.find(
+    (conversation) => conversation.mode === "agent"
+  );
+  if (existing) {
+    await selectConversation(existing.id);
+    return;
+  }
+
   if (!app.agentModels.length) await refreshOpenCodeModels();
 
   const conversation = createConversation("agent");
